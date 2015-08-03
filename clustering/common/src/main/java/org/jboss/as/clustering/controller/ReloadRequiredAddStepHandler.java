@@ -35,12 +35,17 @@ import org.jboss.dmr.ModelNode;
  */
 public class ReloadRequiredAddStepHandler extends AbstractAddStepHandler {
 
-    public ReloadRequiredAddStepHandler(final AttributeDefinition... attributes) {
+    public ReloadRequiredAddStepHandler(AttributeDefinition... attributes) {
         super(attributes);
     }
 
-    public ReloadRequiredAddStepHandler(final Collection<AttributeDefinition> attributes) {
+    public ReloadRequiredAddStepHandler(Collection<AttributeDefinition> attributes) {
         super(attributes);
+    }
+
+    @Override
+    protected boolean requiresRuntime(OperationContext context) {
+        return !context.isBooting() && super.requiresRuntime(context);
     }
 
     @Override

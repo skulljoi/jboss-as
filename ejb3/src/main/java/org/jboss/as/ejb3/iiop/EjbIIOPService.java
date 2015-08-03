@@ -32,18 +32,12 @@ import javax.ejb.EJBHome;
 import javax.ejb.EJBMetaData;
 import javax.rmi.PortableRemoteObject;
 
-import org.jacorb.ssl.SSLPolicyValue;
-import org.jacorb.ssl.SSLPolicyValueHelper;
-import org.jacorb.ssl.SSL_POLICY_TYPE;
 import org.jboss.as.ee.component.ComponentView;
 import org.jboss.as.ejb3.logging.EjbLogger;
 import org.jboss.as.ejb3.component.EJBComponent;
 import org.jboss.as.ejb3.component.entity.EntityBeanComponent;
 import org.jboss.as.ejb3.component.stateless.StatelessSessionComponent;
 import org.jboss.as.ejb3.iiop.stub.DynamicStubFactoryFactory;
-import org.jboss.as.jacorb.csiv2.CSIv2Policy;
-import org.jboss.as.jacorb.rmi.ir.InterfaceRepository;
-import org.jboss.as.jacorb.rmi.marshal.strategy.SkeletonStrategy;
 import org.jboss.as.server.moduleservice.ServiceModuleLoader;
 import org.jboss.ejb.client.EJBHomeLocator;
 import org.jboss.ejb.client.EJBLocator;
@@ -85,7 +79,12 @@ import org.omg.CosNaming.NamingContextPackage.NotFound;
 import org.omg.PortableServer.Current;
 import org.omg.PortableServer.CurrentHelper;
 import org.omg.PortableServer.POA;
+import org.wildfly.iiop.openjdk.csiv2.CSIv2Policy;
+import org.wildfly.iiop.openjdk.rmi.ir.InterfaceRepository;
+import org.wildfly.iiop.openjdk.rmi.marshal.strategy.SkeletonStrategy;
 import org.wildfly.security.manager.WildFlySecurityManager;
+
+import com.sun.corba.se.spi.extension.ZeroPortPolicy;
 
 /**
  * This is an IIOP "proxy factory" for <code>EJBHome</code>s and
@@ -207,7 +206,7 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
     private final InjectedValue<POA> irPoa = new InjectedValue<POA>();
 
     /**
-     * Default IOR security config metadata (defined in the jacorb subsystem).
+     * Default IOR security config metadata (defined in the iiop subsystem).
      */
     private final InjectedValue<IORSecurityConfigMetaData> iorSecConfigMetaData = new InjectedValue<IORSecurityConfigMetaData>();
 
@@ -235,6 +234,7 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
 
 
     public synchronized void start(final StartContext startContext) throws StartException {
+
 
         try {
             final RiverMarshallerFactory factory = new RiverMarshallerFactory();
@@ -265,6 +265,7 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
             }
             name = name.replace(".", "_");
 
+
             final ORB orb = this.orb.getValue();
             if (interfaceRepositorySupported) {
                 // Create a CORBA interface repository for the enterprise bean
@@ -288,9 +289,10 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
                 final Any secPolicy = orb.create_any();
                 secPolicy.insert_Value(iorSecurityConfigMetaData);
                 Policy csiv2Policy = orb.create_policy(CSIv2Policy.TYPE, secPolicy);
+
                 policyList.add(csiv2Policy);
 
-                // Create SSLPolicy (SSL_REQUIRED ensures home and remote IORs will have port 0 in the primary address).
+                //  Add ZeroPortPolicy if ssl is required (it ensures home and remote IORs will have port 0 in the primary address).
                 boolean sslRequired = false;
                 if (iorSecurityConfigMetaData != null && iorSecurityConfigMetaData.getTransportConfig() != null) {
                     IORTransportConfigMetaData tc = iorSecurityConfigMetaData.getTransportConfig();
@@ -298,12 +300,9 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
                             || IORTransportConfigMetaData.CONFIDENTIALITY_REQUIRED.equals(tc.getConfidentiality())
                             || IORTransportConfigMetaData.ESTABLISH_TRUST_IN_CLIENT_REQUIRED.equals(tc.getEstablishTrustInClient());
                 }
-                final Any sslPolicyValue = orb.create_any();
-                SSLPolicyValueHelper.insert(sslPolicyValue, (sslRequired) ? SSLPolicyValue.SSL_REQUIRED : SSLPolicyValue.SSL_NOT_REQUIRED);
-                Policy sslPolicy = orb.create_policy(SSL_POLICY_TYPE.value, sslPolicyValue);
-                policyList.add(sslPolicy);
-
-                EjbLogger.ROOT_LOGGER.debug("container's SSL policy: " + sslPolicy);
+                if(sslRequired){
+                    policyList.add(ZeroPortPolicy.getPolicy());
+                }
             }
 
             String securityDomain = "CORBA_REMOTE"; //TODO: what should this default to
@@ -344,7 +343,7 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
                 // This is an entity bean (lifespan: persistent)
                 beanServantRegistry = poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
                 final EntityBeanComponent entityBeanComponent = (EntityBeanComponent) component;
-                final Class pkClass = entityBeanComponent.getPrimaryKeyClass();
+                final Class<?> pkClass = entityBeanComponent.getPrimaryKeyClass();
                 ejbMetaData = new EJBMetaDataImplIIOP(entityBeanComponent.getRemoteClass(), entityBeanComponent.getHomeClass(), pkClass, false, false, homeHandle);
             } else {
                 // This is a session bean (lifespan: transient)
@@ -374,7 +373,7 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
 
             // Register bean home in local CORBA naming context
             rebind(corbaNamingContext.getValue(), name, corbaRef);
-            EjbLogger.ROOT_LOGGER.debug("Home IOR for " + component.getComponentName() + " bound to " + this.name + " in CORBA naming service");
+            EjbLogger.ROOT_LOGGER.debugf("Home IOR for %s bound to %s in CORBA naming service", component.getComponentName(), this.name);
 
             //now eagerly force stub creation, so de-serialization of stubs will work correctly
             final ClassLoader cl = WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
@@ -458,14 +457,14 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
                     final Marshaller marshaller = factory.createMarshaller(configuration);
                     final ByteArrayOutputStream stream = new ByteArrayOutputStream();
                     marshaller.start(new OutputStreamByteOutput(stream));
-                    marshaller.writeObject(((StatefulEJBLocator) locator).getSessionId());
+                    marshaller.writeObject(((StatefulEJBLocator<?>) locator).getSessionId());
                     marshaller.finish();
                     return beanReferenceFactory.createReferenceWithId(stream.toByteArray(), beanRepositoryIds[0]);
                 } else if (locator instanceof EntityEJBLocator) {
                     final Marshaller marshaller = factory.createMarshaller(configuration);
                     final ByteArrayOutputStream stream = new ByteArrayOutputStream();
                     marshaller.start(new OutputStreamByteOutput(stream));
-                    marshaller.writeObject(((EntityEJBLocator) locator).getPrimaryKey());
+                    marshaller.writeObject(((EntityEJBLocator<?>) locator).getPrimaryKey());
                     marshaller.finish();
                     return beanReferenceFactory.createReferenceWithId(stream.toByteArray(), beanRepositoryIds[0]);
                 }
@@ -484,7 +483,7 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
      * @param locator The locator to get the handle for
      * @return The {@link org.jboss.ejb.client.EJBHandle} or {@link org.jboss.ejb.client.EJBHomeHandle}
      */
-    public Object handleForLocator(final EJBLocator locator) {
+    public Object handleForLocator(final EJBLocator<?> locator) {
         final org.omg.CORBA.Object reference = referenceForLocator(locator);
         if(locator instanceof EJBHomeLocator) {
             return new HomeHandleImplIIOP(orb.getValue().object_to_string(reference));
@@ -507,6 +506,7 @@ public class EjbIIOPService implements Service<EjbIIOPService> {
     public static synchronized void rebind(final NamingContextExt ctx, final String strName, final org.omg.CORBA.Object obj) throws Exception {
         final NameComponent[] name = ctx.to_name(strName);
         NamingContext intermediateCtx = ctx;
+
 
         for (int i = 0; i < name.length - 1; i++) {
             final NameComponent[] relativeName = new NameComponent[]{name[i]};

@@ -28,13 +28,11 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 
-import org.jboss.as.connector.deployers.ra.processors.AbstractResourceAdapterDeploymentServiceListener;
 import org.jboss.as.connector.metadata.xmldescriptors.ConnectorXmlDescriptor;
 import org.jboss.as.connector.services.mdr.AS7MetadataRepository;
 import org.jboss.as.connector.services.resourceadapters.deployment.ResourceAdapterXmlDeploymentService;
 import org.jboss.as.connector.services.resourceadapters.deployment.registry.ResourceAdapterDeploymentRegistry;
 import org.jboss.as.connector.subsystems.jca.JcaSubsystemConfiguration;
-import org.jboss.as.controller.ServiceVerificationHandler;
 import org.jboss.as.controller.descriptions.OverrideDescriptionProvider;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
@@ -47,7 +45,6 @@ import org.jboss.jca.core.api.connectionmanager.ccm.CachedConnectionManager;
 import org.jboss.jca.core.api.management.ManagementRepository;
 import org.jboss.jca.core.spi.rar.ResourceAdapterRepository;
 import org.jboss.jca.core.spi.transaction.TransactionIntegration;
-import org.jboss.jca.deployers.common.CommonDeployment;
 import org.jboss.modules.Module;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
@@ -57,7 +54,9 @@ import org.jboss.security.SubjectFactory;
 
 public class RaServicesFactory {
 
-    public static void createDeploymentService(final ManagementResourceRegistration registration, ConnectorXmlDescriptor connectorXmlDescriptor, Module module, ServiceTarget serviceTarget, final String deploymentUnitName, ServiceName deploymentUnitServiceName, String deployment, Activation raxml, final Resource deploymentResource, final ServiceVerificationHandler serviceVerificationHandler) {
+    public static void createDeploymentService(final ManagementResourceRegistration registration, ConnectorXmlDescriptor connectorXmlDescriptor, Module module,
+                                               ServiceTarget serviceTarget, final String deploymentUnitName, ServiceName deploymentUnitServiceName, String deployment,
+                                               Activation raxml, final Resource deploymentResource) {
         // Create the service
 
         ServiceName serviceName = ConnectorServices.getDeploymentServiceName(deploymentUnitName,raxml);
@@ -91,11 +90,7 @@ public class RaServicesFactory {
                 .addDependency(ConnectorServices.BOOTSTRAP_CONTEXT_SERVICE.append(bootStrapCtxName))
                 .addDependency(ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName()));
 
-        if(serviceVerificationHandler != null) {
-            builder.addListener(serviceVerificationHandler);
-        }
         if (registration != null && deploymentResource != null) {
-            String bootstrapCtxName =  raxml.getBootstrapContext() != null ? raxml.getBootstrapContext() : "default";
             if (registration.isAllowsOverride() && registration.getOverrideModel(deploymentUnitName) == null) {
                 registration.registerOverrideModel(deploymentUnitName, new OverrideDescriptionProvider() {
                     @Override
@@ -109,20 +104,11 @@ public class RaServicesFactory {
                     }
                 });
             }
-            builder.addListener(new AbstractResourceAdapterDeploymentServiceListener(registration, deploymentUnitName, deploymentResource, bootstrapCtxName, raxml.getId()) {
-
-                @Override
-                protected void registerIronjacamar(ServiceController<? extends Object> controller, ManagementResourceRegistration subRegistration, Resource subsystemResource) {
-                    //do nothing, no ironjacamar registration for raxml activated ra
-                }
-
-                @Override
-                protected CommonDeployment getDeploymentMetadata(final ServiceController<? extends Object> controller) {
-                    return ((ResourceAdapterXmlDeploymentService) controller.getService()).getRaxmlDeployment();
-                }
-            });
         }
 
+
+
         builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+
     }
 }

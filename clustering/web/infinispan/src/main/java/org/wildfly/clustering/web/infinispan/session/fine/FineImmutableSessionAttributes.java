@@ -25,7 +25,9 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.infinispan.Cache;
-import org.wildfly.clustering.web.infinispan.session.SessionAttributeMarshaller;
+import org.wildfly.clustering.marshalling.InvalidSerializedFormException;
+import org.wildfly.clustering.marshalling.Marshaller;
+import org.wildfly.clustering.web.infinispan.logging.InfinispanWebLogger;
 import org.wildfly.clustering.web.session.ImmutableSessionAttributes;
 
 /**
@@ -35,9 +37,9 @@ import org.wildfly.clustering.web.session.ImmutableSessionAttributes;
 public class FineImmutableSessionAttributes<V> implements ImmutableSessionAttributes {
     private final String id;
     private final Cache<SessionAttributeCacheKey, V> cache;
-    private final SessionAttributeMarshaller<Object, V> marshaller;
+    private final Marshaller<Object, V> marshaller;
 
-    public FineImmutableSessionAttributes(String id, Cache<SessionAttributeCacheKey, V> attributeCache, SessionAttributeMarshaller<Object, V> marshaller) {
+    public FineImmutableSessionAttributes(String id, Cache<SessionAttributeCacheKey, V> attributeCache, Marshaller<Object, V> marshaller) {
         this.id = id;
         this.cache = attributeCache;
         this.marshaller = marshaller;
@@ -55,10 +57,19 @@ public class FineImmutableSessionAttributes<V> implements ImmutableSessionAttrib
     @Override
     public Object getAttribute(String name) {
         SessionAttributeCacheKey key = this.createKey(name);
-        return this.marshaller.read(this.cache.get(key));
+        return this.read(name, this.cache.get(key));
     }
 
     protected SessionAttributeCacheKey createKey(String attribute) {
         return new SessionAttributeCacheKey(this.id, attribute);
+    }
+
+    protected Object read(String name, V value) {
+        try {
+            return this.marshaller.read(value);
+        } catch (InvalidSerializedFormException e) {
+            // This should not happen here, since attributes were pre-activated during FineSessionFactory.findValue(...)
+            throw InfinispanWebLogger.ROOT_LOGGER.failedToReadSessionAttribute(e, this.id, name);
+        }
     }
 }

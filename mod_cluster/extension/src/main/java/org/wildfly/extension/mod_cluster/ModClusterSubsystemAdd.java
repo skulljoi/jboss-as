@@ -67,19 +67,18 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import org.jboss.as.clustering.msc.AsynchronousService;
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathAddress;
-import org.jboss.as.controller.ServiceVerificationHandler;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.network.OutboundSocketBinding;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.as.network.SocketBindingManager;
+import org.jboss.common.beans.property.BeanUtils;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.modcluster.config.impl.ModClusterConfig;
@@ -88,13 +87,12 @@ import org.jboss.modcluster.load.impl.DynamicLoadBalanceFactorProvider;
 import org.jboss.modcluster.load.impl.SimpleLoadBalanceFactorProvider;
 import org.jboss.modcluster.load.metric.LoadMetric;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceController.Mode;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.ValueService;
 import org.jboss.msc.value.ImmediateValue;
 import org.jboss.msc.value.InjectedValue;
-import org.jboss.util.propertyeditor.PropertyEditors;
+import org.wildfly.clustering.service.AsynchronousServiceBuilder;
 
 /**
  * The managed subsystem add update.
@@ -111,29 +109,30 @@ class ModClusterSubsystemAdd extends AbstractBoottimeAddStepHandler {
     static final ModClusterSubsystemAdd INSTANCE = new ModClusterSubsystemAdd();
 
     @Override
-    public void performBoottime(OperationContext context, ModelNode operation, ModelNode model, ServiceVerificationHandler verificationHandler, List<ServiceController<?>> newControllers) throws OperationFailedException {
+    public void performBoottime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
         ServiceTarget target = context.getServiceTarget();
         final ModelNode fullModel = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
         final ModelNode modelConfig = fullModel.get(ModClusterConfigResourceDefinition.PATH.getKeyValuePair());
         final ModClusterConfig config = getModClusterConfig(context, modelConfig);
 
-        newControllers.add(target.addService(ContainerEventHandlerService.CONFIG_SERVICE_NAME, new ValueService<>(new ImmediateValue<>(config))).setInitialMode(Mode.ACTIVE).install());
+        target.addService(ContainerEventHandlerService.CONFIG_SERVICE_NAME, new ValueService<>(new ImmediateValue<>(config)))
+                .setInitialMode(Mode.ACTIVE)
+                .install();
 
         // Construct LoadBalanceFactorProvider and call pluggable boot time handlers.
         Set<LoadMetric> metrics = new HashSet<LoadMetric>();
         final LoadBalanceFactorProvider loadProvider = getModClusterLoadProvider(metrics, context, modelConfig);
 
         for (BoottimeHandlerProvider handler : ServiceLoader.load(BoottimeHandlerProvider.class, BoottimeHandlerProvider.class.getClassLoader())) {
-            handler.performBoottime(metrics, context, operation, model, verificationHandler, newControllers);
+            handler.performBoottime(metrics, context, operation, model);
         }
 
         final String connector = CONNECTOR.resolveModelAttribute(context, modelConfig).asString();
         final int statusInterval = STATUS_INTERVAL.resolveModelAttribute(context, modelConfig).asInt();
         InjectedValue<SocketBindingManager> socketBindingManager = new InjectedValue<SocketBindingManager>();
         ContainerEventHandlerService service = new ContainerEventHandlerService(config, loadProvider, socketBindingManager);
-        final ServiceBuilder<?> builder = AsynchronousService.addService(target, ContainerEventHandlerService.SERVICE_NAME, service, true, true)
+        final ServiceBuilder<?> builder = new AsynchronousServiceBuilder<>(ContainerEventHandlerService.SERVICE_NAME, service).build(target)
                 .addDependency(SocketBindingManager.SOCKET_BINDING_MANAGER, SocketBindingManager.class, socketBindingManager)
-                .addListener(verificationHandler)
                 .setInitialMode(Mode.ACTIVE);
 
         // Add advertise socket binding dependency
@@ -157,11 +156,11 @@ class ModClusterSubsystemAdd extends AbstractBoottimeAddStepHandler {
         }
 
         // Install the main service
-        newControllers.add(builder.install());
+        builder.install();
 
         // Install services for web container integration
         for (ContainerEventHandlerAdapterBuilder adapterBuilder: ServiceLoader.load(ContainerEventHandlerAdapterBuilder.class, ContainerEventHandlerAdapterBuilder.class.getClassLoader())) {
-            newControllers.add(adapterBuilder.build(target, connector, statusInterval).addListener(verificationHandler).setInitialMode(Mode.PASSIVE).install());
+            adapterBuilder.build(target, connector, statusInterval).setInitialMode(Mode.PASSIVE).install();
         }
     }
 
@@ -350,7 +349,7 @@ class ModClusterSubsystemAdd extends AbstractBoottimeAddStepHandler {
                         props.putAll(propertyMap);
 
                         try {
-                            PropertyEditors.mapJavaBeanProperties(metric, props, true);
+                            BeanUtils.mapJavaBeanProperties(metric, props, true);
                         } catch (Exception ex) {
                             ROOT_LOGGER.errorApplyingMetricProperties(ex, loadMetricClass.getCanonicalName());
 
@@ -360,9 +359,7 @@ class ModClusterSubsystemAdd extends AbstractBoottimeAddStepHandler {
                     }
 
                     metrics.add(metric);
-                } catch (InstantiationException e) {
-                    ROOT_LOGGER.errorAddingMetrics(e);
-                } catch (IllegalAccessException e) {
+                } catch (InstantiationException | IllegalAccessException e) {
                     ROOT_LOGGER.errorAddingMetrics(e);
                 }
             }

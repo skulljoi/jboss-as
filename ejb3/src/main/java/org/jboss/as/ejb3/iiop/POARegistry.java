@@ -103,7 +103,7 @@ public class POARegistry implements Service<POARegistry> {
         // Policies for per-servant transient POAs
         transientPoaPolicies = new Policy[]{rootPOA.create_lifespan_policy(
                 LifespanPolicyValue.TRANSIENT),
-                rootPOA.create_id_assignment_policy(IdAssignmentPolicyValue.USER_ID),
+                rootPOA.create_id_assignment_policy(IdAssignmentPolicyValue.SYSTEM_ID),
                 rootPOA.create_servant_retention_policy(ServantRetentionPolicyValue.NON_RETAIN),
                 rootPOA.create_request_processing_policy(RequestProcessingPolicyValue.USE_DEFAULT_SERVANT),
                 rootPOA.create_id_uniqueness_policy( IdUniquenessPolicyValue.MULTIPLE_ID),
@@ -154,20 +154,14 @@ public class POARegistry implements Service<POARegistry> {
 
     static class PoaReferenceFactory implements ReferenceFactory {
         private final POA poa;
-        private final String servantName;
         private final Policy[] policies;
-        PoaReferenceFactory(final POA poa, final String servantName, final Policy[] policies) {
+        PoaReferenceFactory(final POA poa, final Policy[] policies) {
             this.poa = poa;
-            this.servantName = servantName;
             this.policies = policies;
         }
 
-        PoaReferenceFactory(final POA poa, final String servantName) {
-            this( poa, servantName, null);
-        }
-
         PoaReferenceFactory(final POA poa) {
-            this(poa, null, null);
+            this(poa, null);
         }
 
         public org.omg.CORBA.Object createReference(final String interfId) throws Exception {

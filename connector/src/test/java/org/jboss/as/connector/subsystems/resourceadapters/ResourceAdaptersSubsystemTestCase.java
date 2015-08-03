@@ -23,6 +23,7 @@ package org.jboss.as.connector.subsystems.resourceadapters;
 
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.MODULE;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.RESOURCEADAPTER_NAME;
+import static org.jboss.as.connector.subsystems.resourceadapters.Constants.STATISTICS_ENABLED;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.TRACKING;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.WM_SECURITY;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.WM_SECURITY_DOMAIN;
@@ -31,6 +32,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUB
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
 
 import org.jboss.as.connector.logging.ConnectorLogger;
 import org.jboss.as.controller.ModelVersion;
@@ -65,6 +67,30 @@ public class ResourceAdaptersSubsystemTestCase extends AbstractSubsystemBaseTest
         return readResource("empty-resourceadapters.xml");
     }
 
+    @Override
+    protected String getSubsystemXsdPath() throws Exception {
+        return "schema/wildfly-resource-adapters_3_0.xsd";
+    }
+
+    @Override
+    protected String[] getSubsystemTemplatePaths() throws IOException {
+        return new String[]{
+                "/subsystem-templates/resource-adapters.xml",
+                "/subsystem-templates/resource-adapters-genericjms.xml"
+        };
+    }
+
+    @Override
+    protected Properties getResolvedProperties() {
+        Properties properties = new Properties();
+        properties.put("genericjms.cf.jndi-name", "genericjms");
+        properties.put("genericjms.cf.pool-name", "mypool");
+        properties.put("genericjms.cf.jndi.contextfactory", "foo");
+        properties.put("genericjms.cf.jndi.url", "bar");
+        properties.put("genericjms.cf.jndi.lookup", "baz");
+        return properties;
+    }
+
     @Test
     public void testFullConfig() throws Exception {
         standardSubsystemTest("resource-adapters-pool.xml", null, true);
@@ -87,40 +113,17 @@ public class ResourceAdaptersSubsystemTestCase extends AbstractSubsystemBaseTest
     }
 
     @Test
-    public void testTransformerAS712() throws Exception {
-        testTransformer("resource-adapters-xapool.xml", ModelTestControllerVersion.V7_1_2_FINAL, ModelVersion.create(1, 1, 0));
+    public void testTransformerEAP62() throws Exception {
+        testRejectingTransformer("resource-adapters-pool-20.xml", ModelTestControllerVersion.EAP_6_2_0, ModelVersion.create(1, 3, 0));
     }
 
     @Test
-    public void testTransformerAS713() throws Exception {
-        testTransformer("resource-adapters-xapool.xml", ModelTestControllerVersion.V7_1_3_FINAL, ModelVersion.create(1, 1, 0));
-    }
-
-    @Test
-    public void tesExpressionsAS712() throws Exception {
+    public void testExpressionsEAP62() throws Exception {
         //this file contain expression for all supported fields except bean-validation-groups and recovery-plugin-properties
         // for a limitation in test suite not permitting to have expression in type LIST or OBJECT for legacyServices
-        testTransformer("resource-adapters-xapool-expression2.xml", ModelTestControllerVersion.V7_1_2_FINAL, ModelVersion.create(1, 1, 0));
+        testTransformer("resource-adapters-xapool-expression.xml", ModelTestControllerVersion.EAP_6_2_0, ModelVersion.create(1, 3, 0));
     }
 
-    @Test
-    public void testExpressionsAS713() throws Exception {
-        //this file contain expression for all supported fields except bean-validation-groups and recovery-plugin-properties
-        // for a limitation in test suite not permitting to have expression in type LIST or OBJECT for legacyServices
-        testTransformer("resource-adapters-xapool-expression2.xml", ModelTestControllerVersion.V7_1_3_FINAL, ModelVersion.create(1, 1, 0));
-    }
-
-    @Test
-    public void testTransformerAS72() throws Exception {
-        testRejectingTransformer("resource-adapters-pool-20.xml", ModelTestControllerVersion.V7_2_0_FINAL, ModelVersion.create(1, 2, 0));
-    }
-
-    @Test
-    public void testExpressionsAS72() throws Exception {
-        //this file contain expression for all supported fields except bean-validation-groups and recovery-plugin-properties
-        // for a limitation in test suite not permitting to have expression in type LIST or OBJECT for legacyServices
-        testTransformer("resource-adapters-xapool-expression.xml", ModelTestControllerVersion.V7_2_0_FINAL, ModelVersion.create(1, 2, 0));
-    }
     /**
      * Tests transformation of model from current to passed one
      *
@@ -148,10 +151,12 @@ public class ResourceAdaptersSubsystemTestCase extends AbstractSubsystemBaseTest
                     public ModelNode fixModel(ModelNode modelNode) {
                         //Replace the value used in the xml
                         if (modelNode.get(Constants.RESOURCEADAPTER_NAME).hasDefined("myRA")) {
-                            if (modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.ENLISTMENT.getName()).isDefined())
+                            if (modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.ENLISTMENT.getName()).isDefined()) {
                                 modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.ENLISTMENT.getName()).set(false);
-                            if (modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.SHARABLE.getName()).isDefined())
+                            }
+                            if (modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.SHARABLE.getName()).isDefined()) {
                                 modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.SHARABLE.getName()).set(false);
+                            }
 
                         }
                         return modelNode;
@@ -168,17 +173,18 @@ public class ResourceAdaptersSubsystemTestCase extends AbstractSubsystemBaseTest
 
         checkSubsystemModelTransformation(mainServices, modelVersion, new ModelFixer() {
 
-                            @Override
-                            public ModelNode fixModel(ModelNode modelNode) {
-                                //Replace the value used in the xml
-                                if (modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").isDefined()) {
-                                    if(! modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").hasDefined(Constants.APPLICATION.getName()))
-                                        modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.APPLICATION.getName()).set(false);
-                                }
-                                return modelNode;
+            @Override
+            public ModelNode fixModel(ModelNode modelNode) {
+                //Replace the value used in the xml
+                if (modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").isDefined()) {
+                    if (!modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").hasDefined(Constants.APPLICATION.getName())) {
+                        modelNode.get(Constants.RESOURCEADAPTER_NAME).get("myRA").get(Constants.CONNECTIONDEFINITIONS_NAME).get("poolName").get(Constants.APPLICATION.getName()).set(false);
+                    }
+                }
+                return modelNode;
 
-                            }
-                        });
+            }
+        });
 
     }
 
@@ -215,7 +221,7 @@ public class ResourceAdaptersSubsystemTestCase extends AbstractSubsystemBaseTest
         ModelTestUtils.checkFailedTransformedBootOperations(mainServices, modelVersion, ops, new FailedOperationTransformationConfig()
                 .addFailedAttribute(subsystemAddress.append(PathElement.pathElement(RESOURCEADAPTER_NAME)),
                         new FailedOperationTransformationConfig.AttributesPathAddressConfig(WM_SECURITY.getName(), WM_SECURITY_MAPPING_REQUIRED.getName(),
-                                WM_SECURITY_DOMAIN.getName(), MODULE.getName()) {
+                                WM_SECURITY_DOMAIN.getName(), MODULE.getName(), STATISTICS_ENABLED.getName()) {
                             @Override
                             protected boolean isAttributeWritable(String attributeName) {
                                 return false;

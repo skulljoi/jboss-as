@@ -1,7 +1,12 @@
 package org.wildfly.extension.undertow.filters;
 
+import io.undertow.Handlers;
+import io.undertow.client.UndertowClient;
+import io.undertow.predicate.PredicateParser;
+import io.undertow.protocols.ssl.UndertowXnioSsl;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
+import org.jboss.as.domain.management.SecurityRealm;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceBuilder;
@@ -13,6 +18,9 @@ import org.jboss.msc.service.StopContext;
 import org.jboss.msc.value.InjectedValue;
 import org.wildfly.extension.io.IOServices;
 import org.wildfly.extension.undertow.UndertowService;
+import org.wildfly.extension.undertow.logging.UndertowLogger;
+import org.xnio.OptionMap;
+import org.xnio.Options;
 import org.xnio.XnioWorker;
 
 import io.undertow.predicate.Predicate;
@@ -21,8 +29,11 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.PredicateHandler;
 import io.undertow.server.handlers.proxy.mod_cluster.MCMPConfig;
 import io.undertow.server.handlers.proxy.mod_cluster.ModCluster;
+import org.xnio.ssl.XnioSsl;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
+import java.net.InetAddress;
 
 /**
  * filter service for the mod cluster frontend. This requires various injections, and as a result can't use the
@@ -35,6 +46,7 @@ public class ModClusterService extends FilterService {
     private final InjectedValue<XnioWorker> workerInjectedValue = new InjectedValue<>();
     private final InjectedValue<SocketBinding> managementSocketBinding = new InjectedValue<>();
     private final InjectedValue<SocketBinding> advertiseSocketBinding = new InjectedValue<>();
+    private final InjectedValue<SecurityRealm> securityRealm = new InjectedValue<>();
     private final long healthCheckInterval;
     private final int maxRequestTime;
     private final long removeBrokenNodes;
@@ -42,11 +54,17 @@ public class ModClusterService extends FilterService {
     private final String advertisePath;
     private final String advertiseProtocol;
     private final String securityKey;
+    private final Predicate managementAccessPredicate;
+    private final int connectionsPerThread;
+    private final int cachedConnections;
+    private final int connectionIdleTimeout;
+    private final int requestQueueSize;
+    private final boolean useAlias;
 
     private ModCluster modCluster;
     private MCMPConfig config;
 
-    ModClusterService(ModelNode model, long healthCheckInterval, int maxRequestTime, long removeBrokenNodes, int advertiseFrequency, String advertisePath, String advertiseProtocol, String securityKey) {
+    ModClusterService(ModelNode model, long healthCheckInterval, int maxRequestTime, long removeBrokenNodes, int advertiseFrequency, String advertisePath, String advertiseProtocol, String securityKey, Predicate managementAccessPredicate, int connectionsPerThread, int cachedConnections, int connectionIdleTimeout, int requestQueueSize, boolean useAlias) {
         super(ModClusterDefinition.INSTANCE, model);
         this.healthCheckInterval = healthCheckInterval;
         this.maxRequestTime = maxRequestTime;
@@ -55,23 +73,56 @@ public class ModClusterService extends FilterService {
         this.advertisePath = advertisePath;
         this.advertiseProtocol = advertiseProtocol;
         this.securityKey = securityKey;
+        this.managementAccessPredicate = managementAccessPredicate;
+        this.connectionsPerThread = connectionsPerThread;
+        this.cachedConnections = cachedConnections;
+        this.connectionIdleTimeout = connectionIdleTimeout;
+        this.requestQueueSize = requestQueueSize;
+        this.useAlias = useAlias;
     }
 
     @Override
     public synchronized void start(StartContext context) throws StartException {
         super.start(context);
 
+        SecurityRealm realm = securityRealm.getOptionalValue();
+
         //TODO: SSL support for the client
-        modCluster = ModCluster.builder(workerInjectedValue.getValue())
-                .setHealthCheckInterval(healthCheckInterval)
+        //TODO: wire up idle timeout when new version of undertow arrives
+        final ModCluster.Builder modClusterBuilder;
+        final XnioWorker worker = workerInjectedValue.getValue();
+        if(realm == null) {
+            modClusterBuilder = ModCluster.builder(worker);
+        } else {
+            SSLContext sslContext = realm.getSSLContext();
+            OptionMap.Builder builder = OptionMap.builder();
+            builder.set(Options.USE_DIRECT_BUFFERS, true);
+            OptionMap combined = builder.getMap();
+
+            XnioSsl xnioSsl = new UndertowXnioSsl(worker.getXnio(), combined, sslContext);
+            modClusterBuilder = ModCluster.builder(worker, UndertowClient.getInstance(), xnioSsl);
+        }
+        modClusterBuilder.setHealthCheckInterval(healthCheckInterval)
                 .setMaxRequestTime(maxRequestTime)
+                .setCacheConnections(cachedConnections)
+                .setQueueNewRequests(requestQueueSize > 0)
+                .setRequestQueueSize(requestQueueSize)
                 .setRemoveBrokenNodes(removeBrokenNodes)
+                .setTtl(connectionIdleTimeout)
+                .setMaxConnections(connectionsPerThread)
+                .setUseAlias(useAlias);
+
+        modCluster = modClusterBuilder
                 .build();
 
         MCMPConfig.Builder builder = MCMPConfig.builder();
+        InetAddress multicastAddress = advertiseSocketBinding.getValue().getMulticastAddress();
+        if(multicastAddress == null) {
+            throw UndertowLogger.ROOT_LOGGER.advertiseSocketBindingRequiresMulticastAddress();
+        }
         builder.enableAdvertise()
                 .setAdvertiseAddress(advertiseSocketBinding.getValue().getSocketAddress().getAddress().getHostAddress())
-                .setAdvertiseGroup(advertiseSocketBinding.getValue().getMulticastAddress().getHostAddress())
+                .setAdvertiseGroup(multicastAddress.getHostAddress())
                 .setAdvertisePort(advertiseSocketBinding.getValue().getPort())
                 .setAdvertiseFrequency(advertiseFrequency)
                 .setPath(advertisePath)
@@ -79,7 +130,9 @@ public class ModClusterService extends FilterService {
                 .setSecurityKey(securityKey);
         builder.setManagementHost(managementSocketBinding.getValue().getSocketAddress().getHostName());
         builder.setManagementPort(managementSocketBinding.getValue().getSocketAddress().getPort());
+
         config = builder.build();
+
 
         try {
             modCluster.advertise(config);
@@ -104,7 +157,7 @@ public class ModClusterService extends FilterService {
         //to specify the next handler. To get around this we invoke the mod_proxy handler
         //and then if it has not dispatched or handled the request then we know that we can
         //just pass it on to the next handler
-        final HttpHandler mcmp = config.create(modCluster, next);
+        final HttpHandler mcmp = managementAccessPredicate != null  ? Handlers.predicate(managementAccessPredicate, config.create(modCluster, next), next)  :  config.create(modCluster, next);
         final HttpHandler proxyHandler = modCluster.getProxyHandler();
         HttpHandler theHandler = new HttpHandler() {
             @Override
@@ -130,6 +183,17 @@ public class ModClusterService extends FilterService {
             securityKey = securityKeyNode.asString();
         }
 
+        String managementAccessPredicateString = null;
+        ModelNode managementAccessPredicateNode = ModClusterDefinition.MANAGEMENT_ACCESS_PREDICATE.resolveModelAttribute(operationContext, model);
+        if(managementAccessPredicateNode.isDefined()) {
+            managementAccessPredicateString = managementAccessPredicateNode.asString();
+        }
+        Predicate managementAccessPredicate = null;
+        if(managementAccessPredicateString != null) {
+            managementAccessPredicate = PredicateParser.parse(managementAccessPredicateString, ModClusterService.class.getClassLoader());
+        }
+        final ModelNode securityRealm = ModClusterDefinition.SECURITY_REALM.resolveModelAttribute(operationContext, model);
+
         ModClusterService service = new ModClusterService(model,
                 ModClusterDefinition.HEALTH_CHECK_INTERVAL.resolveModelAttribute(operationContext, model).asInt(),
                 ModClusterDefinition.MAX_REQUEST_TIME.resolveModelAttribute(operationContext, model).asInt(),
@@ -137,11 +201,25 @@ public class ModClusterService extends FilterService {
                 ModClusterDefinition.ADVERTISE_FREQUENCY.resolveModelAttribute(operationContext, model).asInt(),
                 ModClusterDefinition.ADVERTISE_PATH.resolveModelAttribute(operationContext, model).asString(),
                 ModClusterDefinition.ADVERTISE_PROTOCOL.resolveModelAttribute(operationContext, model).asString(),
-                securityKey);
+                securityKey, managementAccessPredicate,
+                ModClusterDefinition.CONNECTIONS_PER_THREAD.resolveModelAttribute(operationContext, model).asInt(),
+                ModClusterDefinition.CACHED_CONNECTIONS_PER_THREAD.resolveModelAttribute(operationContext, model).asInt(),
+                ModClusterDefinition.CONNECTION_IDLE_TIMEOUT.resolveModelAttribute(operationContext, model).asInt(),
+                ModClusterDefinition.REQUEST_QUEUE_SIZE.resolveModelAttribute(operationContext, model).asInt(),
+                ModClusterDefinition.USE_ALIAS.resolveModelAttribute(operationContext, model).asBoolean());
         ServiceBuilder<FilterService> builder = serviceTarget.addService(UndertowService.FILTER.append(name), service);
         builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(ModClusterDefinition.MANAGEMENT_SOCKET_BINDING.resolveModelAttribute(operationContext, model).asString()), SocketBinding.class, service.managementSocketBinding);
         builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(ModClusterDefinition.ADVERTISE_SOCKET_BINDING.resolveModelAttribute(operationContext, model).asString()), SocketBinding.class, service.advertiseSocketBinding);
         builder.addDependency(IOServices.WORKER.append(ModClusterDefinition.WORKER.resolveModelAttribute(operationContext, model).asString()), XnioWorker.class, service.workerInjectedValue);
+
+        if(securityRealm.isDefined()) {
+            SecurityRealm.ServiceUtil.addDependency(builder, service.securityRealm, securityRealm.asString(), false);
+        }
+
         return builder.install();
+    }
+
+    public ModCluster getModCluster() {
+        return modCluster;
     }
 }

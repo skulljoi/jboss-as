@@ -59,9 +59,9 @@
     </xs:complexType>
     <xs:complexType name="serverType">
         <xs:sequence>
+            <xs:element name="ajp-listener" type="ajp-listener-type" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="http-listener" type="http-listener-type" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="https-listener" type="https-listener-type" minOccurs="0" maxOccurs="unbounded"/>
-            <xs:element name="ajp-listener" type="ajp-listener-type" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="host" type="hostType" minOccurs="1" maxOccurs="unbounded"/>
         </xs:sequence>
         <xs:attribute name="name" use="required" type="xs:string"/>
@@ -100,6 +100,8 @@
                 <xs:attribute name="max-buffered-request-size" type="xs:long" default="16384"/>
                 <xs:attribute name="record-request-start-time" type="xs:boolean" default="false"/>
                 <xs:attribute name="allow-equals-in-cookie-value" type="xs:boolean" default="false"/>
+                <xs:attribute name="no-request-timeout" type="xs:int"/>
+                <xs:attribute name="request-parse-timeout" type="xs:int"/>
             </xs:extension>
         </xs:complexContent>
     </xs:complexType>
@@ -136,6 +138,15 @@
                         </xs:documentation>
                     </xs:annotation>
                 </xs:attribute>
+                <xs:attribute name="enable-http2" use="optional" type="xs:string">
+                    <xs:annotation>
+                        <xs:documentation>
+                            <![CDATA[
+                              Enables HTTP2 upgrade and prior knowledge connections
+                               ]]>
+                        </xs:documentation>
+                    </xs:annotation>
+                </xs:attribute>
             </xs:extension>
         </xs:complexContent>
     </xs:complexType>
@@ -147,6 +158,8 @@
                 <xs:attribute name="verify-client" use="optional" type="xs:string"/>
                 <xs:attribute name="enabled-cipher-suites" use="optional" type="xs:string"/>
                 <xs:attribute name="enabled-protocols" use="optional" type="xs:string"/>
+                <xs:attribute name="enable-http2" use="optional" type="xs:string"/>
+                <xs:attribute name="enable-spdy" use="optional" type="xs:string"/>
             </xs:extension>
         </xs:complexContent>
     </xs:complexType>
@@ -280,9 +293,11 @@
         <xs:attribute name="pattern" use="optional" type="xs:string" default="common"/>
         <xs:attribute name="worker" use="optional" type="xs:string" default="default"/>
         <xs:attribute name="directory" use="optional" type="xs:string" default="${jboss.server.log.dir}"/>
+        <xs:attribute name="relative-to" use="optional" type="xs:string" />
         <xs:attribute name="prefix" use="optional" type="xs:string" default="access_log"/>
         <xs:attribute name="suffix" use="optional" type="xs:string" default=".log"/>
         <xs:attribute name="rotate" use="optional" type="xs:string" default="true"/>
+        <xs:attribute name="use-server-log" use="optional" type="xs:string" default="false"/>
     </xs:complexType>
     <xs:complexType name="errorPageType">
         <xs:attribute name="name" use="required" type="xs:string"/>
@@ -322,6 +337,9 @@
         <xs:attribute name="session-cookie-names" use="optional" type="xs:string"/>
         <xs:attribute name="problem-server-retry" use="optional" type="xs:integer"/>
         <xs:attribute name="max-request-time" use="optional" type="xs:integer"/>
+        <xs:attribute name="request-queue-size" use="optional" type="xs:integer"/>
+        <xs:attribute name="cached-connections-per-thread" use="optional" type="xs:integer"/>
+        <xs:attribute name="connection-idle-timeout" use="optional" type="xs:integer"/>
     </xs:complexType>
 
     <xs:complexType name="reverse-proxy-hostType">
@@ -445,5 +463,12 @@
         <xs:attribute name="advertise-frequency" type="xs:int" use="optional"/>
         <xs:attribute name="health-check-interval" type="xs:int" use="optional"/>
         <xs:attribute name="broken-node-timeout" type="xs:int" use="optional"/>
+        <xs:attribute name="worker" type="xs:string" use="optional" />
+        <xs:attribute name="max-request-time" type="xs:int" use="optional"/>
+        <xs:attribute name="management-access-predicate" type="xs:string" use="optional"/>
+        <xs:attribute name="connections-per-thread" type="xs:int" use="optional" />
+        <xs:attribute name="cached-connections-per-thread" type="xs:int" use="optional" />
+        <xs:attribute name="connection-idle-timeout" type="xs:int" use="optional" />
+        <xs:attribute name="request-queue-size" type="xs:int" use="optional" />
     </xs:complexType>
 </xs:schema>

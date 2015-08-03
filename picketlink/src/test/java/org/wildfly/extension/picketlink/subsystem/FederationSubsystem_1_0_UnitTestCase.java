@@ -22,65 +22,44 @@
 
 package org.wildfly.extension.picketlink.subsystem;
 
-import org.jboss.as.controller.RunningMode;
-import org.jboss.as.subsystem.test.AbstractSubsystemBaseTest;
+import org.jboss.as.subsystem.test.AbstractSubsystemTest;
 import org.jboss.as.subsystem.test.AdditionalInitialization;
-import org.jboss.as.subsystem.test.ControllerInitializer;
 import org.jboss.as.subsystem.test.KernelServices;
-import org.jboss.as.subsystem.test.KernelServicesBuilder;
+import org.jboss.dmr.ModelNode;
 import org.junit.Test;
 import org.wildfly.extension.picketlink.federation.FederationExtension;
-import org.wildfly.extension.picketlink.federation.Namespace;
-
-import java.io.IOException;
-
-import static org.junit.Assert.assertTrue;
 
 /**
  * @author Pedro Igor
  */
-public class FederationSubsystem_1_0_UnitTestCase extends AbstractSubsystemBaseTest {
+public class FederationSubsystem_1_0_UnitTestCase extends AbstractSubsystemTest {
 
     public FederationSubsystem_1_0_UnitTestCase() {
         super(FederationExtension.SUBSYSTEM_NAME, new FederationExtension());
     }
 
-    @Override
-    protected String getSubsystemXml() throws IOException {
-        return readResource("federation-subsystem-1.0.xml");
-    }
-
     @Test
-    public void testRuntime() throws Exception {
-        System.setProperty("jboss.server.data.dir", System.getProperty("java.io.tmpdir"));
-        System.setProperty("jboss.home.dir", System.getProperty("java.io.tmpdir"));
-        System.setProperty("jboss.server.server.dir", System.getProperty("java.io.tmpdir"));
+    public void testParseAndMarshalModel() throws Exception {
+        //Parse the subsystem xml and install into the first controller
+        String subsystemXml = readResource("federation-subsystem-1.0.xml");
 
-        KernelServicesBuilder builder = createKernelServicesBuilder(new AdditionalInitialization() {
-            @Override
-            protected RunningMode getRunningMode() {
-                return RunningMode.NORMAL;
-            }
+        KernelServices servicesA = createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT)
+                .setSubsystemXml(subsystemXml)
+                .build();
+        //Get the model and the persisted xml from the first controller
+        ModelNode modelA = servicesA.readWholeModel();
+        String marshalled = servicesA.getPersistedSubsystemXml();
+        servicesA.shutdown();
 
-            @Override
-            protected void setupController(ControllerInitializer controllerInitializer) {
-                super.setupController(controllerInitializer);
-                controllerInitializer.addPath("jboss.server.data.dir", System.getProperty("java.io.tmpdir"), null);
-            }
-        }).setSubsystemXml(getSubsystemXml());
+        //Install the persisted xml from the first controller into a second controller
+        KernelServices servicesB = createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT)
+                .setSubsystemXml(marshalled)
+                .build();
+        ModelNode modelB = servicesB.readWholeModel();
 
-        KernelServices mainServices = builder.build();
+        //Make sure the models from the two controllers are identical
+        super.compare(modelA, modelB);
 
-        assertTrue(mainServices.isSuccessfulBoot());
-    }
-
-    @Test
-    public void testExpressions() throws Exception {
-        standardSubsystemTest("federation-subsystem-expressions-1.0.xml");
-    }
-
-    @Override
-    protected String normalizeXML(String xml) throws Exception {
-        return super.normalizeXML(xml).replace(Namespace.PICKETLINK_FEDERATION_1_0.getUri(), Namespace.PICKETLINK_FEDERATION_2_0.getUri());
+        assertRemoveSubsystemResources(servicesB);
     }
 }

@@ -22,6 +22,7 @@
 
 package org.jboss.as.ejb3.subsystem;
 
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.persistence.SubsystemMarshallingContext;
 import org.jboss.as.remoting.Attribute;
 import org.jboss.as.threads.ThreadsParser;
@@ -31,6 +32,7 @@ import org.jboss.staxmapper.XMLElementWriter;
 import org.jboss.staxmapper.XMLExtendedStreamWriter;
 
 import javax.xml.stream.XMLStreamException;
+
 import java.util.List;
 
 import static org.jboss.as.ejb3.subsystem.EJB3SubsystemModel.*;
@@ -181,6 +183,14 @@ public class EJB3SubsystemXMLPersister implements XMLElementWriter<SubsystemMars
         if (model.hasDefined(SERVICE) && model.get(SERVICE).hasDefined(REMOTE)) {
             writer.writeStartElement(EJB3SubsystemXMLElement.REMOTE.getLocalName());
             writeRemote(writer, model.get(SERVICE, REMOTE));
+
+            // profiles element
+            if (model.hasDefined(REMOTING_PROFILE)) {
+                writer.writeStartElement(EJB3SubsystemXMLElement.PROFILES.getLocalName());
+                writeProfiles(writer, model);
+                writer.writeEndElement();
+            }
+
             writer.writeEndElement();
         }
 
@@ -245,6 +255,11 @@ public class EJB3SubsystemXMLPersister implements XMLElementWriter<SubsystemMars
             writer.writeEndElement();
         }
 
+        if (model.hasDefined(LOG_SYSTEM_EXCEPTIONS)) {
+            writer.writeStartElement(EJB3SubsystemXMLElement.LOG_SYSTEM_EXCEPTIONS.getLocalName());
+            writer.writeAttribute(EJB3SubsystemXMLAttribute.VALUE.getLocalName(), model.get(EJB3SubsystemModel.LOG_SYSTEM_EXCEPTIONS).asString());
+            writer.writeEndElement();
+        }
     }
 
     private void writeIIOP(final XMLExtendedStreamWriter writer, final ModelNode model) throws XMLStreamException {
@@ -400,7 +415,7 @@ public class EJB3SubsystemXMLPersister implements XMLElementWriter<SubsystemMars
             ModelNode cache = property.getValue();
             writer.writeAttribute(EJB3SubsystemXMLAttribute.NAME.getLocalName(), property.getName());
             CacheFactoryResourceDefinition.PASSIVATION_STORE.marshallAsAttribute(cache, writer);
-            CacheFactoryResourceDefinition.ALIASES.marshallAsElement(cache, writer);
+            writeAttribute(writer, cache, CacheFactoryResourceDefinition.ALIASES);
             writer.writeEndElement();
         }
     }
@@ -515,10 +530,45 @@ public class EJB3SubsystemXMLPersister implements XMLElementWriter<SubsystemMars
             writer.writeStartElement(EJB3SubsystemXMLElement.OPTION.getLocalName());
             writer.writeAttribute(Attribute.NAME.getLocalName(), optionPropertyModelNode.getName());
             final ModelNode propertyValueModelNode = optionPropertyModelNode.getValue();
-            ChannelCreationOptionResource.CHANNEL_CREATION_OPTION_VALUE.marshallAsAttribute(propertyValueModelNode, writer);
-            ChannelCreationOptionResource.CHANNEL_CREATION_OPTION_TYPE.marshallAsAttribute(propertyValueModelNode, writer);
+            RemoteConnectorChannelCreationOptionResource.CHANNEL_CREATION_OPTION_VALUE.marshallAsAttribute(propertyValueModelNode, writer);
+            RemoteConnectorChannelCreationOptionResource.CHANNEL_CREATION_OPTION_TYPE.marshallAsAttribute(propertyValueModelNode, writer);
             writer.writeEndElement();
         }
         writer.writeEndElement();
+    }
+
+    private void writeProfiles(final XMLExtendedStreamWriter writer, final ModelNode model) throws XMLStreamException {
+        final List<Property> profiles = model.get(REMOTING_PROFILE).asPropertyList();
+        for (final Property property : profiles) {
+            writer.writeStartElement(PROFILE);
+            writer.writeAttribute(EJB3SubsystemXMLAttribute.NAME.getLocalName(), property.getName());
+            final ModelNode profileNode = property.getValue();
+            RemotingProfileResourceDefinition.EXCLUDE_LOCAL_RECEIVER.marshallAsAttribute(profileNode, writer);
+            RemotingProfileResourceDefinition.LOCAL_RECEIVER_PASS_BY_VALUE.marshallAsAttribute(profileNode, writer);
+            if(profileNode.hasDefined(REMOTING_EJB_RECEIVER)){
+                writeRemotingEjbReceivers(writer, profileNode);
+            }
+            writer.writeEndElement();
+        }
+    }
+
+    private void writeRemotingEjbReceivers(final XMLExtendedStreamWriter writer, final ModelNode profileNode)
+            throws XMLStreamException {
+        final List<Property> receivers = profileNode.get(REMOTING_EJB_RECEIVER).asPropertyList();
+        for (final Property property : receivers) {
+            writer.writeStartElement(REMOTING_EJB_RECEIVER);
+            writer.writeAttribute(EJB3SubsystemXMLAttribute.NAME.getLocalName(), property.getName());
+            final ModelNode receiverNode = property.getValue();
+            RemotingEjbReceiverDefinition.OUTBOUND_CONNECTION_REF.marshallAsAttribute(receiverNode, writer);
+            RemotingEjbReceiverDefinition.CONNECT_TIMEOUT.marshallAsAttribute(receiverNode, writer);
+            if (receiverNode.hasDefined(CHANNEL_CREATION_OPTIONS)) {
+                writeChannelCreationOptions(writer, receiverNode.get(CHANNEL_CREATION_OPTIONS));
+            }
+            writer.writeEndElement();
+        }
+    }
+
+    private static void writeAttribute(XMLExtendedStreamWriter writer, ModelNode model, AttributeDefinition attribute) throws XMLStreamException {
+        attribute.getAttributeMarshaller().marshallAsAttribute(attribute, model, true, writer);
     }
 }

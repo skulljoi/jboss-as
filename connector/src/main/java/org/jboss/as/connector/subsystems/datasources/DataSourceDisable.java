@@ -26,10 +26,11 @@ import static org.jboss.as.connector.subsystems.datasources.Constants.JNDI_NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ENABLED;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 
-import java.util.LinkedList;
+import javax.sql.DataSource;
 import java.util.List;
 
 import org.jboss.as.connector.logging.ConnectorLogger;
+import org.jboss.as.connector.services.datasources.statistics.DataSourceStatisticsService;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
@@ -68,7 +69,7 @@ public class DataSourceDisable implements OperationStepHandler {
 
         if (context.isNormalServer()) {
 
-            DataSourceStatisticsListener.removeStatisticsResources(resource);
+            DataSourceStatisticsService.removeStatisticsResources(resource);
 
             if (context.isResourceServiceRestartAllowed()) {
                 context.addStep(new OperationStepHandler() {
@@ -76,32 +77,34 @@ public class DataSourceDisable implements OperationStepHandler {
 
                         final ModelNode address = operation.require(OP_ADDR);
                         final String dsName = PathAddress.pathAddress(address).getLastElement().getValue();
-                        final String jndiName = model.get(JNDI_NAME.getName()).asString();
+                        final String jndiName = JNDI_NAME.resolveModelAttribute(context, model).asString();
+                        final ContextNames.BindInfo bindInfo = ContextNames.bindInfoFor(jndiName);
 
                         final ServiceRegistry registry = context.getServiceRegistry(true);
 
-                        final ServiceName dataSourceServiceName = AbstractDataSourceService.SERVICE_NAME_BASE.append(jndiName);
+                        final ServiceName dataSourceServiceName = context.getCapabilityServiceName(Capabilities.DATA_SOURCE_CAPABILITY_NAME, dsName, DataSource.class);
                         final ServiceController<?> dataSourceController = registry.getService(dataSourceServiceName);
                         if (dataSourceController != null) {
                             if (ServiceController.State.UP.equals(dataSourceController.getState())) {
                                 dataSourceController.setMode(ServiceController.Mode.NEVER);
                             } else {
-                                throw new OperationFailedException(new ModelNode().set(ConnectorLogger.ROOT_LOGGER.serviceNotEnabled("Data-source", dsName)));
+                                throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.serviceNotEnabled("Data-source", dsName));
                             }
                         } else {
-                            throw new OperationFailedException(new ModelNode().set(ConnectorLogger.ROOT_LOGGER.serviceNotAvailable("Data-source", dsName)));
+                            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.serviceNotAvailable("Data-source", dsName));
                         }
-
+                        context.removeService(CommonDeploymentService.getServiceName(bindInfo));
+                        context.removeService(dataSourceServiceName.append(Constants.STATISTICS));
                         final ServiceName referenceServiceName = DataSourceReferenceFactoryService.SERVICE_NAME_BASE.append(dsName);
                         final ServiceController<?> referenceController = registry.getService(referenceServiceName);
-                        if (referenceController != null ) {
+                        if (referenceController != null) {
                             context.removeService(referenceController);
                         }
 
-                        final ServiceName binderServiceName = ContextNames.bindInfoFor(jndiName).getBinderServiceName();
+                        final ServiceName binderServiceName = bindInfo.getBinderServiceName();
 
                         final ServiceController<?> binderController = registry.getService(binderServiceName);
-                        if (binderController != null ) {
+                        if (binderController != null) {
                             context.removeService(binderController);
                         }
 
@@ -124,10 +127,10 @@ public class DataSourceDisable implements OperationStepHandler {
                                     if (ServiceController.State.UP.equals(connPropertyController.getState())) {
                                         connPropertyController.setMode(ServiceController.Mode.NEVER);
                                     } else {
-                                        throw new OperationFailedException(new ModelNode().set(ConnectorLogger.ROOT_LOGGER.serviceAlreadyStarted("Data-source.connectionProperty", name)));
+                                        throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.serviceAlreadyStarted("Data-source.connectionProperty", name));
                                     }
                                 } else {
-                                    throw new OperationFailedException(new ModelNode().set(ConnectorLogger.ROOT_LOGGER.serviceNotAvailable("Data-source.connectionProperty", name)));
+                                    throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.serviceNotAvailable("Data-source.connectionProperty", name));
                                 }
                             }
                             if (xaDataSourceConfigServiceName.append("xa-datasource-properties").isParentOf(name)) {
@@ -137,10 +140,10 @@ public class DataSourceDisable implements OperationStepHandler {
                                     if (ServiceController.State.UP.equals(xaConfigPropertyController.getState())) {
                                         xaConfigPropertyController.setMode(ServiceController.Mode.NEVER);
                                     } else {
-                                        throw new OperationFailedException(new ModelNode().set(ConnectorLogger.ROOT_LOGGER.serviceAlreadyStarted("Data-source.xa-config-property", name)));
+                                        throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.serviceAlreadyStarted("Data-source.xa-config-property", name));
                                     }
                                 } else {
-                                    throw new OperationFailedException(new ModelNode().set(ConnectorLogger.ROOT_LOGGER.serviceNotAvailable("Data-source.xa-config-property", name)));
+                                    throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.serviceNotAvailable("Data-source.xa-config-property", name));
                                 }
                             }
                         }
@@ -186,8 +189,8 @@ public class DataSourceDisable implements OperationStepHandler {
             for (PathElement element : addr) {
                 resource = resource.getChild(element);
             }
-            DataSourceEnable.addServices(context, operation, null, datasourceRegistration,
-                    Resource.Tools.readModel(resource), isXa(), new LinkedList<ServiceController<?>>());
+            DataSourceEnable.addServices(context, operation, datasourceRegistration,
+                    Resource.Tools.readModel(resource), isXa());
         }
     }
 

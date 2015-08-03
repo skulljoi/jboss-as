@@ -21,7 +21,6 @@
  */
 package org.jboss.as.ejb3.deployment.processors;
 
-
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +37,7 @@ import org.jboss.as.ee.component.ViewConfiguration;
 import org.jboss.as.ee.component.ViewConfigurator;
 import org.jboss.as.ee.component.ViewDescription;
 import org.jboss.as.ee.component.interceptors.InterceptorOrder;
+import org.jboss.as.ee.utils.ClassLoadingUtils;
 import org.jboss.as.ejb3.logging.EjbLogger;
 import org.jboss.as.ejb3.component.EJBComponent;
 import org.jboss.as.ejb3.component.EJBComponentDescription;
@@ -47,24 +47,12 @@ import org.jboss.as.ejb3.iiop.EjbIIOPService;
 import org.jboss.as.ejb3.iiop.EjbIIOPTransactionInterceptor;
 import org.jboss.as.ejb3.iiop.POARegistry;
 import org.jboss.as.ejb3.subsystem.IIOPSettingsService;
-import org.jboss.as.jacorb.deployment.JacORBDeploymentMarker;
-import org.jboss.as.jacorb.rmi.AttributeAnalysis;
-import org.jboss.as.jacorb.rmi.InterfaceAnalysis;
-import org.jboss.as.jacorb.rmi.OperationAnalysis;
-import org.jboss.as.jacorb.rmi.RMIIIOPViolationException;
-import org.jboss.as.jacorb.rmi.marshal.strategy.SkeletonStrategy;
-import org.jboss.as.jacorb.service.CorbaNamingService;
-import org.jboss.as.jacorb.service.CorbaORBService;
-import org.jboss.as.jacorb.service.CorbaPOAService;
-import org.jboss.as.jacorb.service.IORSecConfigMetaDataService;
 import org.jboss.as.server.Services;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.as.server.deployment.EjbDeploymentMarker;
-import org.jboss.as.server.deployment.reflect.ClassIndex;
-import org.jboss.as.server.deployment.reflect.DeploymentClassIndex;
 import org.jboss.as.server.deployment.reflect.DeploymentReflectionIndex;
 import org.jboss.as.server.moduleservice.ServiceModuleLoader;
 import org.jboss.as.txn.service.TxnServices;
@@ -77,6 +65,16 @@ import org.jboss.msc.service.ServiceTarget;
 import org.omg.CORBA.ORB;
 import org.omg.CosNaming.NamingContextExt;
 import org.omg.PortableServer.POA;
+import org.wildfly.iiop.openjdk.deployment.IIOPDeploymentMarker;
+import org.wildfly.iiop.openjdk.rmi.AttributeAnalysis;
+import org.wildfly.iiop.openjdk.rmi.InterfaceAnalysis;
+import org.wildfly.iiop.openjdk.rmi.OperationAnalysis;
+import org.wildfly.iiop.openjdk.rmi.RMIIIOPViolationException;
+import org.wildfly.iiop.openjdk.rmi.marshal.strategy.SkeletonStrategy;
+import org.wildfly.iiop.openjdk.service.CorbaNamingService;
+import org.wildfly.iiop.openjdk.service.CorbaORBService;
+import org.wildfly.iiop.openjdk.service.CorbaPOAService;
+import org.wildfly.iiop.openjdk.service.IORSecConfigMetaDataService;
 
 /**
  * This is the DUP that sets up IIOP for EJB's
@@ -92,8 +90,9 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
     @Override
     public void deploy(final DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
 
+
         final DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
-        if (!JacORBDeploymentMarker.isJacORBDeployment(deploymentUnit)) {
+        if (!IIOPDeploymentMarker.isIIOPDeployment(deploymentUnit)) {
             return;
         }
 
@@ -101,6 +100,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
         if (!EjbDeploymentMarker.isEjbDeployment(deploymentUnit)) {
             return;
         }
+
 
         // a bean-name -> IIOPMetaData map, reflecting the assembly descriptor IIOP configuration.
         Map<String, IIOPMetaData> iiopMetaDataMap = new HashMap<String, IIOPMetaData>();
@@ -114,7 +114,6 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
             }
         }
 
-        final DeploymentClassIndex classIndex = deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.CLASS_INDEX);
         final DeploymentReflectionIndex deploymentReflectionIndex = deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
         final Module module = deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
         if (moduleDescription != null) {
@@ -130,7 +129,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
                         // the bean will be exposed via IIOP if it has IIOP metadata that applies to it or if IIOP access
                         // has been enabled by default in the EJB3 subsystem.
                         if (iiopMetaData != null || settingsService.isEnabledByDefault()) {
-                            processEjb(ejbComponentDescription, classIndex, deploymentReflectionIndex, module,
+                            processEjb(ejbComponentDescription, deploymentReflectionIndex, module,
                                     phaseContext.getServiceTarget(), iiopMetaData);
                         }
                     }
@@ -144,7 +143,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
 
     }
 
-    private void processEjb(final EJBComponentDescription componentDescription, final DeploymentClassIndex classIndex,
+    private void processEjb(final EJBComponentDescription componentDescription,
                             final DeploymentReflectionIndex deploymentReflectionIndex, final Module module,
                             final ServiceTarget serviceTarget, final IIOPMetaData iiopMetaData) {
         componentDescription.setExposedViaIiop(true);
@@ -152,20 +151,22 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
 
         // Create bean method mappings for container invoker
 
+
         final EJBViewDescription remoteView = componentDescription.getEjbRemoteView();
-        final ClassIndex remoteClass;
+        final Class<?> remoteClass;
         try {
-            remoteClass = classIndex.classIndex(remoteView.getViewClassName());
+            remoteClass = ClassLoadingUtils.loadClass(remoteView.getViewClassName(), module);
         } catch (ClassNotFoundException e) {
             throw EjbLogger.ROOT_LOGGER.failedToLoadViewClassForComponent(e, componentDescription.getEJBClassName());
         }
         final EJBViewDescription homeView = componentDescription.getEjbHomeView();
-        final ClassIndex homeClass;
+        final Class<?> homeClass;
         try {
-            homeClass = classIndex.classIndex(homeView.getViewClassName());
+            homeClass = ClassLoadingUtils.loadClass(homeView.getViewClassName(), module);
         } catch (ClassNotFoundException e) {
             throw EjbLogger.ROOT_LOGGER.failedToLoadViewClassForComponent(e, componentDescription.getEJBClassName());
         }
+
 
         componentDescription.getEjbHomeView().getConfigurators().add(new IIOPInterceptorViewConfigurator());
         componentDescription.getEjbRemoteView().getConfigurators().add(new IIOPInterceptorViewConfigurator());
@@ -174,7 +175,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
         final InterfaceAnalysis remoteInterfaceAnalysis;
         try {
             //TODO: change all this to use the deployment reflection index
-            remoteInterfaceAnalysis = InterfaceAnalysis.getInterfaceAnalysis(remoteClass.getModuleClass());
+            remoteInterfaceAnalysis = InterfaceAnalysis.getInterfaceAnalysis(remoteClass);
         } catch (RMIIIOPViolationException e) {
             throw EjbLogger.ROOT_LOGGER.failedToAnalyzeRemoteInterface(e, componentDescription.getComponentName());
         }
@@ -185,7 +186,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
         for (int i = 0; i < remoteAttrs.length; i++) {
             final OperationAnalysis op = remoteAttrs[i].getAccessorAnalysis();
             if (op != null) {
-                EjbLogger.ROOT_LOGGER.debug("    " + op.getJavaName() + "\n                " + op.getIDLName());
+                EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s", op.getJavaName(), op.getIDLName());
                 //translate to the deployment reflection index method
                 //TODO: this needs to be fixed so it just returns the correct method
                 final Method method = translateMethod(deploymentReflectionIndex, op);
@@ -193,7 +194,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
                 beanMethodMap.put(op.getIDLName(), new SkeletonStrategy(method));
                 final OperationAnalysis setop = remoteAttrs[i].getMutatorAnalysis();
                 if (setop != null) {
-                    EjbLogger.ROOT_LOGGER.debug("    " + setop.getJavaName() + "\n                " + setop.getIDLName());
+                    EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s", setop.getJavaName(), setop.getIDLName());
                     //translate to the deployment reflection index method
                     //TODO: this needs to be fixed so it just returns the correct method
                     final Method realSetmethod = translateMethod(deploymentReflectionIndex, setop);
@@ -204,7 +205,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
 
         final OperationAnalysis[] ops = remoteInterfaceAnalysis.getOperations();
         for (int i = 0; i < ops.length; i++) {
-            EjbLogger.ROOT_LOGGER.debug("    " + ops[i].getJavaName() + "\n                " + ops[i].getIDLName());
+            EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s", ops[i].getJavaName(), ops[i].getIDLName());
             beanMethodMap.put(ops[i].getIDLName(), new SkeletonStrategy(translateMethod(deploymentReflectionIndex, ops[i])));
         }
 
@@ -215,7 +216,7 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
         final InterfaceAnalysis homeInterfaceAnalysis;
         try {
             //TODO: change all this to use the deployment reflection index
-            homeInterfaceAnalysis = InterfaceAnalysis.getInterfaceAnalysis(homeClass.getModuleClass());
+            homeInterfaceAnalysis = InterfaceAnalysis.getInterfaceAnalysis(homeClass);
         } catch (RMIIIOPViolationException e) {
             throw EjbLogger.ROOT_LOGGER.failedToAnalyzeRemoteInterface(e, componentDescription.getComponentName());
         }
@@ -226,11 +227,11 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
         for (int i = 0; i < attrs.length; i++) {
             final OperationAnalysis op = attrs[i].getAccessorAnalysis();
             if (op != null) {
-                EjbLogger.ROOT_LOGGER.debug("    " + op.getJavaName() + "\n                " + op.getIDLName());
+                EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s", op.getJavaName(), op.getIDLName());
                 homeMethodMap.put(op.getIDLName(), new SkeletonStrategy(translateMethod(deploymentReflectionIndex, op)));
                 final OperationAnalysis setop = attrs[i].getMutatorAnalysis();
                 if (setop != null) {
-                    EjbLogger.ROOT_LOGGER.debug("    " + setop.getJavaName() + "\n                " + setop.getIDLName());
+                    EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s", setop.getJavaName(), setop.getIDLName());
                     homeMethodMap.put(setop.getIDLName(), new SkeletonStrategy(translateMethod(deploymentReflectionIndex, setop)));
                 }
             }
@@ -238,12 +239,13 @@ public class EjbIIOPDeploymentUnitProcessor implements DeploymentUnitProcessor {
 
         final OperationAnalysis[] homeops = homeInterfaceAnalysis.getOperations();
         for (int i = 0; i < homeops.length; i++) {
-            EjbLogger.ROOT_LOGGER.debug("    " + homeops[i].getJavaName() + "\n                " + homeops[i].getIDLName());
+            EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s", homeops[i].getJavaName(), homeops[i].getIDLName());
             homeMethodMap.put(homeops[i].getIDLName(), new SkeletonStrategy(translateMethod(deploymentReflectionIndex, homeops[i])));
         }
 
         // Initialize repository ids of home interface
         final String[] homeRepositoryIds = homeInterfaceAnalysis.getAllTypeIds();
+
 
         final EjbIIOPService service = new EjbIIOPService(beanMethodMap, beanRepositoryIds, homeMethodMap, homeRepositoryIds,
                 settingsService.isUseQualifiedName(), iiopMetaData, module);

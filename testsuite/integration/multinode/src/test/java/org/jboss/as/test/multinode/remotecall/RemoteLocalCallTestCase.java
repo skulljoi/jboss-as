@@ -41,7 +41,7 @@ import org.junit.runner.RunWith;
 
 /**
  * Testing multinode communication - calling Stateless and Stateful beans (via remote and local and home interfaces).
- * 
+ *
  * @author William DeCoste, Ondrej Chaloupka
  */
 @RunWith(Arquillian.class)
@@ -67,7 +67,7 @@ public class RemoteLocalCallTestCase {
     public static Archive<?> deployment1() {
         JavaArchive jar = createJar(ARCHIVE_NAME_CLIENT);
         jar.addClasses(RemoteLocalCallTestCase.class);
-        jar.addAsManifestResource("META-INF/jboss-ejb-client.xml", "jboss-ejb-client.xml");
+        jar.addAsManifestResource("META-INF/jboss-ejb-client-receivers.xml", "jboss-ejb-client.xml");
         return jar;
     }
 

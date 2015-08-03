@@ -22,11 +22,13 @@
 
 package org.jboss.as.ejb3.subsystem.deployment;
 
+import java.util.Collections;
 import java.util.Set;
 
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.ejb3.logging.EjbLogger;
 import org.jboss.as.ejb3.subsystem.EJB3SubsystemModel;
 import org.jboss.dmr.ModelNode;
 
@@ -36,7 +38,7 @@ import org.jboss.dmr.ModelNode;
  */
 public class TimerServiceResource implements Resource {
 
-    private Resource delegate = Resource.Factory.create();
+    private Resource delegate = Resource.Factory.create(true);
 
     /**
      * @return
@@ -143,6 +145,11 @@ public class TimerServiceResource implements Resource {
         delegate.registerChild(address, resource);
     }
 
+    @Override
+    public void registerChild(PathElement address, int index, Resource resource) {
+        throw EjbLogger.ROOT_LOGGER.indexedChildResourceRegistrationNotAvailable(address);
+    }
+
     /**
      * @param address
      * @return
@@ -150,6 +157,11 @@ public class TimerServiceResource implements Resource {
      */
     public Resource removeChild(PathElement address) {
         return delegate.removeChild(address);
+    }
+
+    @Override
+    public Set<String> getOrderedChildTypes() {
+        return Collections.emptySet();
     }
 
     /**

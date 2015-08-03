@@ -11,7 +11,7 @@
         <subsystem supplement="full-ha">ejb3.xml</subsystem>
         <subsystem>io.xml</subsystem>
         <subsystem supplement="ha">infinispan.xml</subsystem>
-        <subsystem>jacorb.xml</subsystem>
+        <subsystem>iiop-openjdk.xml</subsystem>
         <subsystem>jaxrs.xml</subsystem>
         <subsystem>jca.xml</subsystem>
         <subsystem>jdr.xml</subsystem>
@@ -21,7 +21,7 @@
         <subsystem>jsf.xml</subsystem>
         <subsystem>jsr77.xml</subsystem>
         <subsystem>mail.xml</subsystem>
-        <subsystem supplement="ha">messaging.xml</subsystem>
+        <subsystem supplement="ha">messaging-activemq.xml</subsystem>
         <subsystem>mod_cluster.xml</subsystem>
         <subsystem>naming.xml</subsystem>
         <subsystem>pojo.xml</subsystem>
@@ -29,7 +29,7 @@
         <subsystem>resource-adapters.xml</subsystem>
         <subsystem>request-controller.xml</subsystem>
         <subsystem>sar.xml</subsystem>
-        <subsystem include-if-set="security.manager">security-manager.xml</subsystem>
+        <subsystem>security-manager.xml</subsystem>
         <subsystem>security.xml</subsystem>
         <subsystem>transactions.xml</subsystem>
         <subsystem supplement="ha">undertow.xml</subsystem>

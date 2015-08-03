@@ -67,6 +67,8 @@ public class SingletonComponent extends SessionBeanComponent implements Lockable
 
     private final DefaultAccessTimeoutService defaultAccessTimeoutProvider;
 
+    private Interceptor interceptor;
+
     /**
      * We can't lock on <code>this</code> because the {@link org.jboss.as.ee.component.BasicComponent#waitForComponentStart()}
      * also synchronizes on it, and calls {@link #wait()}.
@@ -132,7 +134,7 @@ public class SingletonComponent extends SessionBeanComponent implements Lockable
         if (this.initOnStartup) {
             // Do not call createInstance() because we can't ever assume that the singleton instance
             // hasn't already been created.
-            ROOT_LOGGER.debug(this.getComponentName() + " bean is a @Startup (a.k.a init-on-startup) bean, creating/getting the singleton instance");
+            ROOT_LOGGER.debugf("%s bean is a @Startup (a.k.a init-on-startup) bean, creating/getting the singleton instance", this.getComponentName());
             this.getComponentInstance();
         }
     }
@@ -177,6 +179,16 @@ public class SingletonComponent extends SessionBeanComponent implements Lockable
     @Override
     public AccessTimeoutDetails getDefaultAccessTimeout() {
         return defaultAccessTimeoutProvider.getDefaultAccessTimeout();
+    }
+
+    @Override
+    public void setConcurrencyManagementInterceptor(Interceptor interceptor) {
+        this.interceptor = interceptor;
+    }
+
+    @Override
+    public Interceptor getConcurrencyManagementInterceptor() {
+        return this.interceptor;
     }
 
     private void destroySingletonInstance() {

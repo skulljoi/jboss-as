@@ -28,7 +28,10 @@ import static org.jboss.logging.Logger.Level.WARN;
 
 import java.io.File;
 import java.net.InetSocketAddress;
+import java.util.List;
 
+import org.jboss.as.controller.OperationFailedException;
+import org.jboss.as.controller.PathAddress;
 import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.dmr.ModelNode;
@@ -120,8 +123,8 @@ public interface UndertowLogger extends BasicLogger {
     void invalidRedirectURI(@Cause Throwable cause);
 
     @LogMessage(level = INFO)
-    @Message(id = 14, value = "Creating file handler for path %s")
-    void creatingFileHandler(String path);
+    @Message(id = 14, value = "Creating file handler for path '%s' with options [directory-listing: '%s', follow-symlink: '%s', case-sensitive: '%s', safe-symlink-paths: '%s']")
+    void creatingFileHandler(String path, boolean directoryListing, boolean followSymlink, boolean caseSensitive, List<String> safePaths);
 
     // @LogMessage(level = TRACE)
     // @Message(id = 15, value = "registering handler %s under path '%s'")
@@ -172,7 +175,7 @@ public interface UndertowLogger extends BasicLogger {
     // XMLStreamException unknownHandler(String name, @Param Location location);
 
     @Message(id = 27, value = "Failed to parse XML descriptor %s at [%s,%s]")
-    String failToParseXMLDescriptor(String xmlFile, int line, int column);
+    String failToParseXMLDescriptor(String xmlFile, Integer line, Integer column);
 
     @Message(id = 28, value = "Failed to parse XML descriptor %s")
     String failToParseXMLDescriptor(String xmlFile);
@@ -228,8 +231,9 @@ public interface UndertowLogger extends BasicLogger {
     @Message(id = 45, value = "Duplicate name declared in JAR: %s")
     String invalidRelativeOrderingDuplicateName(String jar);
 
-    @Message(id = 46, value = "Unknown name declared in JAR: %s")
-    String invalidRelativeOrderingUnknownName(String jar);
+    @LogMessage(level = WARN)
+    @Message(id = 46, value = "Unknown web fragment name declared in JAR: %s")
+    void invalidRelativeOrderingUnknownName(String jar);
 
     @Message(id = 47, value = "Relative ordering conflict with JAR: %s")
     String invalidRelativeOrderingConflict(String jar);
@@ -304,4 +308,38 @@ public interface UndertowLogger extends BasicLogger {
 
     @Message(id = 70, value = "Could not load handler %s from %s module")
     RuntimeException couldNotLoadHandlerFromModule(String className,String moduleName, @Cause Exception e);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 71, value = "Jetty ALPN not found. HTTP2 and SPDY are not available. Please make sure Jetty ALPN is on the boot class path.")
+    void alpnNotFound();
+
+    @Message(id = 72, value = "Could not find configured external path %s")
+    DeploymentUnitProcessingException couldNotFindExternalPath(File path);
+
+    @Message(id = 73, value = "mod_cluster advertise socket binding requires multicast address to be set")
+    StartException advertiseSocketBindingRequiresMulticastAddress();
+
+    @LogMessage(level = ERROR)
+    @Message(id = 74, value = "Could not find TLD %s")
+    void tldNotFound(String location);
+
+    @Message(id = 75, value = "Cannot register resource of type %s")
+    IllegalArgumentException cannotRegisterResourceOfType(String type);
+
+    @Message(id = 76, value = "Cannot remove resource of type %s")
+    IllegalArgumentException cannotRemoveResourceOfType(String type);
+
+    @Message(id = 77, value = "Migrate operation only allowed in admin only mode")
+    OperationFailedException migrateOperationAllowedOnlyInAdminOnly();
+
+    @LogMessage(level = WARN)
+    @Message(id = 78, value = "Could not migrate resource %s")
+    void couldNotMigrateResource(ModelNode node);
+
+    @LogMessage(level = WARN)
+    @Message(id = 79, value = "Could not migrate attribute %s from resource %s")
+    void couldNotMigrateResource(String attribute, PathAddress node);
+
+    @Message(id = 80, value = "Could not migrate SSL connector as no SSL config is defined")
+    OperationFailedException noSslConfig();
 }

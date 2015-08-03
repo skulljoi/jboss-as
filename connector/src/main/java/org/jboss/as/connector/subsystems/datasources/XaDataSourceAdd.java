@@ -22,12 +22,11 @@
 
 package org.jboss.as.connector.subsystems.datasources;
 
-import static org.jboss.as.connector.subsystems.datasources.Constants.XADATASOURCE_PROPERTIES;
 import static org.jboss.as.connector.subsystems.datasources.Constants.XA_DATASOURCE_ATTRIBUTE;
 import static org.jboss.as.connector.subsystems.datasources.Constants.XA_DATASOURCE_PROPERTIES_ATTRIBUTES;
 
 import org.jboss.as.controller.OperationFailedException;
-import org.jboss.as.controller.ServiceVerificationHandler;
+import org.jboss.as.naming.deployment.ContextNames;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceName;
@@ -42,18 +41,17 @@ import org.jboss.msc.service.ServiceTarget;
 public class XaDataSourceAdd extends AbstractDataSourceAdd {
     static final XaDataSourceAdd INSTANCE = new XaDataSourceAdd();
 
-    protected void populateModel(ModelNode operation, ModelNode model) throws OperationFailedException {
-        populateAddModel(operation, model, XADATASOURCE_PROPERTIES.getName(), XA_DATASOURCE_ATTRIBUTE, XA_DATASOURCE_PROPERTIES_ATTRIBUTES);
+    private XaDataSourceAdd() {
+        super(join(XA_DATASOURCE_ATTRIBUTE, XA_DATASOURCE_PROPERTIES_ATTRIBUTES));
     }
 
     protected AbstractDataSourceService createDataSourceService(final String dsName, final String jndiName) throws OperationFailedException {
-        return new XaDataSourceService(dsName, jndiName);
+        return new XaDataSourceService(dsName, ContextNames.bindInfoFor(jndiName));
     }
 
     @Override
     protected void startConfigAndAddDependency(ServiceBuilder<?> dataSourceServiceBuilder, AbstractDataSourceService dataSourceService,
-                                               String jndiName, ServiceTarget serviceTarget, final ModelNode operation,
-                                               final ServiceVerificationHandler handler) throws OperationFailedException {
+                                               String jndiName, ServiceTarget serviceTarget, final ModelNode operation) throws OperationFailedException {
 
         final ServiceName dataSourceCongServiceName = XADataSourceConfigService.SERVICE_NAME_BASE.append(jndiName);
 

@@ -65,6 +65,7 @@ import static org.jboss.as.connector.subsystems.datasources.Constants.INTERLEAVI
 import static org.jboss.as.connector.subsystems.datasources.Constants.JDBC_DRIVER_NAME;
 import static org.jboss.as.connector.subsystems.datasources.Constants.JNDI_NAME;
 import static org.jboss.as.connector.subsystems.datasources.Constants.JTA;
+import static org.jboss.as.connector.subsystems.datasources.Constants.MODULE_SLOT;
 import static org.jboss.as.connector.subsystems.datasources.Constants.NEW_CONNECTION_SQL;
 import static org.jboss.as.connector.subsystems.datasources.Constants.NO_RECOVERY;
 import static org.jboss.as.connector.subsystems.datasources.Constants.NO_TX_SEPARATE_POOL;
@@ -117,6 +118,7 @@ import javax.xml.stream.XMLStreamException;
 
 import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.ExtensionContext;
+import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SubsystemRegistration;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
@@ -150,10 +152,7 @@ public class DataSourcesExtension implements Extension {
     public static final String SUBSYSTEM_NAME = Constants.DATASOURCES;
     private static final String RESOURCE_NAME = DataSourcesExtension.class.getPackage().getName() + ".LocalDescriptions";
 
-    private static final int MANAGEMENT_API_MAJOR_VERSION = 3;
-    private static final int MANAGEMENT_API_MINOR_VERSION = 0;
-    private static final int MANAGEMENT_API_MICRO_VERSION = 0;
-
+    private static final ModelVersion CURRENT_MODEL_VERSION = ModelVersion.create(3, 0, 0);
 
     static StandardResourceDescriptionResolver getResourceDescriptionResolver(final String... keyPrefix) {
         StringBuilder prefix = new StringBuilder(SUBSYSTEM_NAME);
@@ -170,8 +169,7 @@ public class DataSourcesExtension implements Extension {
         boolean registerRuntimeOnly = context.isRuntimeOnlyRegistrationValid();
 
         // Register the remoting subsystem
-        final SubsystemRegistration subsystem = context.registerSubsystem(SUBSYSTEM_NAME, MANAGEMENT_API_MAJOR_VERSION,
-                MANAGEMENT_API_MINOR_VERSION, MANAGEMENT_API_MICRO_VERSION);
+        final SubsystemRegistration subsystem = context.registerSubsystem(SUBSYSTEM_NAME, CURRENT_MODEL_VERSION);
 
         final ManagementResourceRegistration registration = subsystem.registerSubsystemModel(DataSourcesSubsystemRootDefinition.createInstance(registerRuntimeOnly));
 
@@ -189,8 +187,8 @@ public class DataSourcesExtension implements Extension {
 
     @Override
     public void initializeParsers(final ExtensionParsingContext context) {
-        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, Namespace.DATASOURCES_1_0.getUriString(), DataSourceSubsystemParser.INSTANCE);
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, Namespace.DATASOURCES_1_1.getUriString(), DataSourceSubsystemParser.INSTANCE);
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, Namespace.DATASOURCES_1_2.getUriString(), DataSourceSubsystemParser.INSTANCE);
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, Namespace.DATASOURCES_2_0.getUriString(), DataSourceSubsystemParser.INSTANCE);
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, Namespace.DATASOURCES_3_0.getUriString(), DataSourceSubsystemParser.INSTANCE);
     }
@@ -227,7 +225,13 @@ public class DataSourcesExtension implements Extension {
                 for (Property driverProperty : node.get(JDBC_DRIVER_NAME).asPropertyList()) {
                     writer.writeStartElement(DataSources.Tag.DRIVER.getLocalName());
                     writer.writeAttribute(Driver.Attribute.NAME.getLocalName(), driverProperty.getValue().require(DRIVER_NAME.getName()).asString());
-                    writeAttributeIfHas(writer, driverProperty.getValue(), Driver.Attribute.MODULE, DRIVER_MODULE_NAME.getName());
+                    if (has(driverProperty.getValue(), DRIVER_MODULE_NAME.getName())) {
+                        String moduleName = driverProperty.getValue().get(DRIVER_MODULE_NAME.getName()).asString();
+                        if (has(driverProperty.getValue(), MODULE_SLOT.getName())) {
+                            moduleName = moduleName + ":" + driverProperty.getValue().get(MODULE_SLOT.getName()).asString();
+                        }
+                        writer.writeAttribute(Driver.Attribute.MODULE.getLocalName(), moduleName);
+                    }
                     writeAttributeIfHas(writer, driverProperty.getValue(), Driver.Attribute.MAJOR_VERSION, DRIVER_MAJOR_VERSION.getName());
                     writeAttributeIfHas(writer, driverProperty.getValue(), Driver.Attribute.MINOR_VERSION, DRIVER_MINOR_VERSION.getName());
                     writeElementIfHas(writer, driverProperty.getValue(), Driver.Tag.DRIVER_CLASS.getLocalName(), DRIVER_CLASS_NAME.getName());
@@ -339,7 +343,7 @@ public class DataSourcesExtension implements Extension {
                             for (Property connectionProperty : dataSourceNode.get(CONNECTION_LISTENER_PROPERTIES.getName())
                                     .asPropertyList()) {
                                 writeProperty(writer, dataSourceNode, connectionProperty.getName(), connectionProperty
-                                        .getValue().asString(),
+                                                .getValue().asString(),
                                         org.jboss.jca.common.api.metadata.common.Extension.Tag.CONFIG_PROPERTY
                                                 .getLocalName());
                             }
@@ -353,14 +357,14 @@ public class DataSourcesExtension implements Extension {
                         if (dataSourceNode.hasDefined(CAPACITY_INCREMENTER_CLASS.getName())) {
                             writer.writeStartElement(Capacity.Tag.INCREMENTER.getLocalName());
                             CAPACITY_INCREMENTER_CLASS.marshallAsAttribute(dataSourceNode, writer);
-                            CAPACITY_INCREMENTER_PROPERTIES.marshallAsElement(dataSourceNode,writer);
+                            CAPACITY_INCREMENTER_PROPERTIES.marshallAsElement(dataSourceNode, writer);
 
                             writer.writeEndElement();
                         }
                         if (dataSourceNode.hasDefined(CAPACITY_DECREMENTER_CLASS.getName())) {
                             writer.writeStartElement(Capacity.Tag.DECREMENTER.getLocalName());
                             CAPACITY_DECREMENTER_CLASS.marshallAsAttribute(dataSourceNode, writer);
-                            CAPACITY_DECREMENTER_PROPERTIES.marshallAsElement(dataSourceNode,writer);
+                            CAPACITY_DECREMENTER_PROPERTIES.marshallAsElement(dataSourceNode, writer);
 
                             writer.writeEndElement();
                         }
@@ -395,7 +399,7 @@ public class DataSourcesExtension implements Extension {
                         if (dataSourceNode.hasDefined(REAUTHPLUGIN_PROPERTIES.getName())) {
                             for (Property connectionProperty : dataSourceNode.get(REAUTHPLUGIN_PROPERTIES.getName()).asPropertyList()) {
                                 writeProperty(writer, dataSourceNode, connectionProperty.getName(), connectionProperty
-                                        .getValue().asString(),
+                                                .getValue().asString(),
                                         org.jboss.jca.common.api.metadata.common.Extension.Tag.CONFIG_PROPERTY
                                                 .getLocalName());
                             }
@@ -429,7 +433,7 @@ public class DataSourcesExtension implements Extension {
                         if (dataSourceNode.hasDefined(RECOVER_PLUGIN_PROPERTIES.getName())) {
                             for (Property connectionProperty : dataSourceNode.get(RECOVER_PLUGIN_PROPERTIES.getName()).asPropertyList()) {
                                 writeProperty(writer, dataSourceNode, connectionProperty.getName(), connectionProperty
-                                        .getValue().asString(),
+                                                .getValue().asString(),
                                         org.jboss.jca.common.api.metadata.common.Extension.Tag.CONFIG_PROPERTY
                                                 .getLocalName());
                             }
@@ -464,7 +468,7 @@ public class DataSourcesExtension implements Extension {
                             for (Property connectionProperty : dataSourceNode.get(VALID_CONNECTION_CHECKER_PROPERTIES.getName())
                                     .asPropertyList()) {
                                 writeProperty(writer, dataSourceNode, connectionProperty.getName(), connectionProperty
-                                        .getValue().asString(),
+                                                .getValue().asString(),
                                         org.jboss.jca.common.api.metadata.common.Extension.Tag.CONFIG_PROPERTY
                                                 .getLocalName());
                             }
@@ -486,7 +490,7 @@ public class DataSourcesExtension implements Extension {
                             for (Property connectionProperty : dataSourceNode.get(STALE_CONNECTION_CHECKER_PROPERTIES.getName())
                                     .asPropertyList()) {
                                 writeProperty(writer, dataSourceNode, connectionProperty.getName(), connectionProperty
-                                        .getValue().asString(),
+                                                .getValue().asString(),
                                         org.jboss.jca.common.api.metadata.common.Extension.Tag.CONFIG_PROPERTY
                                                 .getLocalName());
                             }
@@ -502,7 +506,7 @@ public class DataSourcesExtension implements Extension {
                             for (Property connectionProperty : dataSourceNode.get(EXCEPTION_SORTER_PROPERTIES.getName())
                                     .asPropertyList()) {
                                 writeProperty(writer, dataSourceNode, connectionProperty.getName(), connectionProperty
-                                        .getValue().asString(),
+                                                .getValue().asString(),
                                         org.jboss.jca.common.api.metadata.common.Extension.Tag.CONFIG_PROPERTY
                                                 .getLocalName());
                             }
@@ -579,7 +583,6 @@ public class DataSourcesExtension implements Extension {
         }
 
 
-
         private boolean hasAnyOf(ModelNode node, SimpleAttributeDefinition... names) {
             for (SimpleAttributeDefinition current : names) {
                 if (has(node, current.getName())) {
@@ -608,40 +611,19 @@ public class DataSourcesExtension implements Extension {
 
             try {
                 String localName = null;
-                switch (Namespace.forUri(reader.getNamespaceURI())) {
-                    case DATASOURCES_1_0: {
-                        localName = reader.getLocalName();
-                        Element element = Element.forName(reader.getLocalName());
-                        SUBSYSTEM_DATASOURCES_LOGGER.tracef("%s -> %s", localName, element);
-                        switch (element) {
-                            case SUBSYSTEM: {
+                localName = reader.getLocalName();
+                Element element = Element.forName(reader.getLocalName());
+                SUBSYSTEM_DATASOURCES_LOGGER.tracef("%s -> %s", localName, element);
+                switch (element) {
+                    case SUBSYSTEM: {
 
-                                final DsParser parser = new DsParser();
-                                parser.parse(reader, list, address);
-                                requireNoContent(reader);
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                    case DATASOURCES_1_1:
-                    case DATASOURCES_2_0:
-                    case DATASOURCES_3_0:{
-                        localName = reader.getLocalName();
-                        Element element = Element.forName(reader.getLocalName());
-                        SUBSYSTEM_DATASOURCES_LOGGER.tracef("%s -> %s", localName, element);
-                        switch (element) {
-                            case SUBSYSTEM: {
-
-                                final DsParser parser = new DsParser();
-                                parser.parse(reader, list, address);
-                                requireNoContent(reader);
-                                break;
-                            }
-                        }
+                        final DsParser parser = new DsParser();
+                        parser.parse(reader, list, address);
+                        requireNoContent(reader);
                         break;
                     }
                 }
+
             } catch (Exception e) {
                 throw new XMLStreamException(e);
             }

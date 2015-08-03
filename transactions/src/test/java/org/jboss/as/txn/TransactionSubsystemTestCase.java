@@ -36,11 +36,9 @@ import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinit
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.NODE_IDENTIFIER;
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.OBJECT_STORE_PATH;
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.OBJECT_STORE_RELATIVE_TO;
-import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.PATH;
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING;
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_MAX_PORTS;
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.RECOVERY_LISTENER;
-import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.RELATIVE_TO;
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.STATISTICS_ENABLED;
 import static org.jboss.as.txn.subsystem.TransactionSubsystemRootResourceDefinition.STATUS_BINDING;
 import static org.junit.Assert.assertNotNull;
@@ -87,6 +85,18 @@ public class TransactionSubsystemTestCase extends AbstractSubsystemBaseTest {
     @Override
     protected String getSubsystemXml() throws IOException {
         return readResource("subsystem.xml");
+    }
+
+    @Override
+    protected String getSubsystemXsdPath() throws Exception {
+        return "schema/wildfly-txn_3_0.xsd";
+    }
+
+    @Override
+    protected String[] getSubsystemTemplatePaths() throws IOException {
+        return new String[] {
+                "/subsystem-templates/transactions.xml"
+        };
     }
 
     @Override
@@ -271,8 +281,6 @@ public class TransactionSubsystemTestCase extends AbstractSubsystemBaseTest {
                                 STATUS_BINDING,
                                 RECOVERY_LISTENER,
                                 NODE_IDENTIFIER,
-                                PATH,
-                                RELATIVE_TO,
                                 PROCESS_ID_SOCKET_BINDING,
                                 PROCESS_ID_SOCKET_MAX_PORTS,
                                 OBJECT_STORE_PATH,
@@ -288,8 +296,6 @@ public class TransactionSubsystemTestCase extends AbstractSubsystemBaseTest {
                         STATUS_BINDING,
                         RECOVERY_LISTENER,
                         NODE_IDENTIFIER,
-                        PATH,
-                        RELATIVE_TO,
                         PROCESS_ID_SOCKET_BINDING,
                         PROCESS_ID_SOCKET_MAX_PORTS,
                         OBJECT_STORE_PATH,

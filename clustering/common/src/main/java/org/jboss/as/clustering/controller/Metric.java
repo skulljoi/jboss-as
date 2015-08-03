@@ -18,17 +18,10 @@
  */
 package org.jboss.as.clustering.controller;
 
-import org.jboss.as.controller.AttributeDefinition;
-import org.jboss.dmr.ModelNode;
-
 /**
  * Interface to be implemented by metric enumerations.
  * @author Paul Ferraro
  * @param <C> metric context
  */
-public interface Metric<C> {
-
-    AttributeDefinition getDefinition();
-
-    ModelNode getValue(C context);
+public interface Metric<C> extends Attribute, Executable<C> {
 }

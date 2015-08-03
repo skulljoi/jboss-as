@@ -27,7 +27,7 @@ import org.jboss.as.ejb3.deployment.DeploymentModuleIdentifier;
 import org.jboss.as.ejb3.deployment.DeploymentRepository;
 import org.jboss.as.ejb3.deployment.EjbDeploymentInformation;
 import org.jboss.as.ejb3.deployment.ModuleDeployment;
-import org.jboss.com.sun.corba.se.impl.javax.rmi.RemoteObjectSubstitution;
+import org.jboss.javax.rmi.RemoteObjectSubstitution;
 import org.jboss.ejb.client.EJBClient;
 import org.jboss.ejb.client.EJBHandle;
 import org.jboss.ejb.client.EJBHomeHandle;
@@ -54,6 +54,8 @@ public class RemoteObjectSubstitutionService implements RemoteObjectSubstitution
 
     @Override
     public Object writeReplaceRemote(final Object object) {
+
+
         final DeploymentRepository deploymentRepository = deploymentRepositoryInjectedValue.getOptionalValue();
         //if we are not started yet just return
         if (deploymentRepository == null) {
@@ -63,14 +65,14 @@ public class RemoteObjectSubstitutionService implements RemoteObjectSubstitution
         if (EJBClient.isEJBProxy(object)) {
             return createIIOPReferenceForBean(object, deploymentRepository);
         } else if (object instanceof EJBHandle) {
-            final EJBHandle handle = (EJBHandle) object;
+            final EJBHandle<?> handle = (EJBHandle<?>) object;
             final EJBLocator<?> locator = handle.getLocator();
             final EjbIIOPService factory = serviceForLocator(locator, deploymentRepository);
             if (factory != null) {
                 return factory.handleForLocator(locator);
             }
         } else if (object instanceof EJBHomeHandle) {
-            final EJBHomeHandle handle = (EJBHomeHandle) object;
+            final EJBHomeHandle<?> handle = (EJBHomeHandle<?>) object;
             final EJBLocator<?> locator = handle.getLocator();
             final EjbIIOPService factory = serviceForLocator(locator, deploymentRepository);
             if (factory != null) {
@@ -106,7 +108,7 @@ public class RemoteObjectSubstitutionService implements RemoteObjectSubstitution
         return object;
     }
 
-    private EjbIIOPService serviceForLocator(final EJBLocator locator, DeploymentRepository deploymentRepository) {
+    private EjbIIOPService serviceForLocator(final EJBLocator<?> locator, DeploymentRepository deploymentRepository) {
         final ModuleDeployment module = deploymentRepository.getModules().get(new DeploymentModuleIdentifier(locator.getAppName(), locator.getModuleName(), locator.getDistinctName()));
         if (module == null) {
             EjbLogger.ROOT_LOGGER.couldNotFindEjbForLocatorIIOP(locator);

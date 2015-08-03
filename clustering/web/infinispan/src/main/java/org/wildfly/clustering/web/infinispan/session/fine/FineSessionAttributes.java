@@ -24,8 +24,8 @@ package org.wildfly.clustering.web.infinispan.session.fine;
 import org.infinispan.Cache;
 import org.infinispan.context.Flag;
 import org.wildfly.clustering.ee.infinispan.CacheEntryMutator;
+import org.wildfly.clustering.marshalling.Marshaller;
 import org.wildfly.clustering.web.infinispan.session.MutableDetector;
-import org.wildfly.clustering.web.infinispan.session.SessionAttributeMarshaller;
 import org.wildfly.clustering.web.session.SessionAttributes;
 
 /**
@@ -34,9 +34,9 @@ import org.wildfly.clustering.web.session.SessionAttributes;
  */
 public class FineSessionAttributes<V> extends FineImmutableSessionAttributes<V> implements SessionAttributes {
     private final Cache<SessionAttributeCacheKey, V> cache;
-    private final SessionAttributeMarshaller<Object, V> marshaller;
+    private final Marshaller<Object, V> marshaller;
 
-    public FineSessionAttributes(String id, Cache<SessionAttributeCacheKey, V> attributeCache, SessionAttributeMarshaller<Object, V> marshaller) {
+    public FineSessionAttributes(String id, Cache<SessionAttributeCacheKey, V> attributeCache, Marshaller<Object, V> marshaller) {
         super(id, attributeCache, marshaller);
         this.cache = attributeCache;
         this.marshaller = marshaller;
@@ -45,7 +45,7 @@ public class FineSessionAttributes<V> extends FineImmutableSessionAttributes<V> 
     @Override
     public Object removeAttribute(String name) {
         SessionAttributeCacheKey key = this.createKey(name);
-        return this.marshaller.read(this.cache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).remove(key));
+        return this.read(name, this.cache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).remove(key));
     }
 
     @Override
@@ -55,18 +55,19 @@ public class FineSessionAttributes<V> extends FineImmutableSessionAttributes<V> 
         }
         SessionAttributeCacheKey key = this.createKey(name);
         V value = this.marshaller.write(attribute);
-        return this.marshaller.read(this.cache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).put(key, value));
+        return this.read(name, this.cache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).put(key, value));
     }
 
     @Override
     public Object getAttribute(String name) {
         SessionAttributeCacheKey key = this.createKey(name);
         V value = this.cache.get(key);
-        if (value == null) return null;
-        Object attribute = this.marshaller.read(value);
-        // If the object is mutable, we need to indicate that the attribute should be replicated
-        if (MutableDetector.isMutable(attribute)) {
-            new CacheEntryMutator<>(this.cache, key, value).mutate();
+        Object attribute = this.read(name, value);
+        if (attribute != null) {
+            // If the object is mutable, we need to indicate that the attribute should be replicated
+            if (MutableDetector.isMutable(attribute)) {
+                new CacheEntryMutator<>(this.cache, key, value).mutate();
+            }
         }
         return attribute;
     }

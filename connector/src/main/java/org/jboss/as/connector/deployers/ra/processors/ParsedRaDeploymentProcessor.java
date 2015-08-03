@@ -36,12 +36,9 @@ import org.jboss.as.connector.services.mdr.AS7MetadataRepository;
 import org.jboss.as.connector.services.resourceadapters.deployment.ResourceAdapterDeploymentService;
 import org.jboss.as.connector.services.resourceadapters.deployment.registry.ResourceAdapterDeploymentRegistry;
 import org.jboss.as.connector.subsystems.jca.JcaSubsystemConfiguration;
-import org.jboss.as.connector.subsystems.resourceadapters.IronJacamarResourceCreator;
-import org.jboss.as.connector.subsystems.resourceadapters.IronJacamarResourceDefinition;
 import org.jboss.as.connector.util.ConnectorServices;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
-import org.jboss.as.controller.ServiceVerificationHandler;
 import org.jboss.as.controller.descriptions.OverrideDescriptionProvider;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
@@ -67,10 +64,8 @@ import org.jboss.jca.core.api.connectionmanager.ccm.CachedConnectionManager;
 import org.jboss.jca.core.api.management.ManagementRepository;
 import org.jboss.jca.core.spi.rar.ResourceAdapterRepository;
 import org.jboss.jca.core.spi.transaction.TransactionIntegration;
-import org.jboss.jca.deployers.common.CommonDeployment;
 import org.jboss.modules.Module;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceController.Mode;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
@@ -127,7 +122,7 @@ public class ParsedRaDeploymentProcessor implements DeploymentUnitProcessor {
         Map<ResourceRoot, Index> annotationIndexes = AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
 
 
-        ServiceBuilder builder = process(connectorXmlDescriptor, ironJacamarXmlDescriptor, classLoader, serviceTarget, annotationIndexes, deploymentUnit.getServiceName(), null);
+        ServiceBuilder builder = process(connectorXmlDescriptor, ironJacamarXmlDescriptor, classLoader, serviceTarget, annotationIndexes, deploymentUnit.getServiceName(),registration, deploymentResource);
         if (builder != null) {
             String bootstrapCtx = null;
 
@@ -151,33 +146,17 @@ public class ParsedRaDeploymentProcessor implements DeploymentUnitProcessor {
                 });
 
             }
-            builder.addListener(new AbstractResourceAdapterDeploymentServiceListener(registration, deploymentUnit.getName(), deploymentResource, bootstrapCtx, deploymentUnit.getName()) {
-
-                @Override
-                protected void registerIronjacamar(final ServiceController<? extends Object> controller, final ManagementResourceRegistration subRegistration, final Resource subsystemResource) {
-                    //register ironJacamar
-                    try {
-                        subRegistration.registerSubModel(new IronJacamarResourceDefinition());
-                    } catch (IllegalArgumentException iae) {
-                        //ignore it: submodel already registered
-                    }
-                    AS7MetadataRepository mdr = ((ResourceAdapterDeploymentService) controller.getService()).getMdr();
-                    IronJacamarResourceCreator.INSTANCE.execute(subsystemResource, mdr);
-                }
-
-                @Override
-                protected CommonDeployment getDeploymentMetadata(final ServiceController<? extends Object> controller) {
-                    return ((ResourceAdapterDeploymentService) controller.getService()).getRaDeployment();
-                }
-            });
-
 
             builder.setInitialMode(Mode.ACTIVE).install();
+
+
         }
     }
 
 
-    public static ServiceBuilder process(final ConnectorXmlDescriptor connectorXmlDescriptor, final IronJacamarXmlDescriptor ironJacamarXmlDescriptor, final ClassLoader classLoader, final ServiceTarget serviceTarget, final Map<ResourceRoot, Index> annotationIndexes, final ServiceName duServiceName, final ServiceVerificationHandler verificationHandler) throws DeploymentUnitProcessingException {
+    public static ServiceBuilder process(final ConnectorXmlDescriptor connectorXmlDescriptor, final IronJacamarXmlDescriptor ironJacamarXmlDescriptor, final ClassLoader classLoader,
+                                         final ServiceTarget serviceTarget, final Map<ResourceRoot, Index> annotationIndexes, final ServiceName duServiceName,
+                                         final ManagementResourceRegistration registration, Resource deploymentResource) throws DeploymentUnitProcessingException {
 
         Connector cmd = connectorXmlDescriptor != null ? connectorXmlDescriptor.getConnector() : null;
         final Activation activation = ironJacamarXmlDescriptor != null ? ironJacamarXmlDescriptor.getIronJacamar() : null;
@@ -210,12 +189,10 @@ public class ParsedRaDeploymentProcessor implements DeploymentUnitProcessor {
             }
 
             final ServiceName deployerServiceName = ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName());
-            final ResourceAdapterDeploymentService raDeploymentService = new ResourceAdapterDeploymentService(connectorXmlDescriptor, cmd, activation, classLoader, deployerServiceName, duServiceName);
-
+            final ResourceAdapterDeploymentService raDeploymentService = new ResourceAdapterDeploymentService(connectorXmlDescriptor, cmd, activation, classLoader, deployerServiceName, duServiceName, registration, deploymentResource);
 
             // Create the service
-            ServiceBuilder builder =
-                    Services.addServerExecutorDependency(
+            return Services.addServerExecutorDependency(
                         serviceTarget.addService(deployerServiceName, raDeploymentService),
                         raDeploymentService.getExecutorServiceInjector(), false)
                     .addDependency(ConnectorServices.IRONJACAMAR_MDR, AS7MetadataRepository.class, raDeploymentService.getMdrInjector())
@@ -229,10 +206,9 @@ public class ParsedRaDeploymentProcessor implements DeploymentUnitProcessor {
                     .addDependency(ConnectorServices.IDLE_REMOVER_SERVICE)
                     .addDependency(ConnectorServices.CONNECTION_VALIDATOR_SERVICE)
                     .addDependency(NamingService.SERVICE_NAME);
-            if(verificationHandler != null) {
-                builder.addListener(verificationHandler);
-            }
-            return builder;
+
+
+
         } catch (Throwable t) {
             throw new DeploymentUnitProcessingException(t);
         }

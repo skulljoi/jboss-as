@@ -46,6 +46,7 @@ import org.jboss.as.ejb3.remote.RegistryInstallerService;
 import org.jboss.as.ejb3.remote.RemoteAsyncInvocationCancelStatusService;
 import org.jboss.as.remoting.RemotingConnectorBindingInfoService;
 import org.jboss.as.remoting.RemotingServices;
+import org.jboss.as.server.suspend.SuspendController;
 import org.jboss.as.txn.service.TransactionManagerService;
 import org.jboss.as.txn.service.TransactionSynchronizationRegistryService;
 import org.jboss.as.txn.service.TxnServices;
@@ -60,11 +61,12 @@ import org.jboss.msc.service.ServiceTarget;
 import org.jboss.remoting3.Endpoint;
 import org.jboss.remoting3.RemotingOptions;
 import org.wildfly.clustering.ejb.BeanManagerFactoryBuilderConfiguration;
-import org.wildfly.clustering.spi.CacheServiceInstaller;
-import org.wildfly.clustering.spi.CacheServiceNameFactory;
-import org.wildfly.clustering.spi.GroupServiceInstaller;
-import org.wildfly.clustering.spi.LocalCacheServiceInstaller;
-import org.wildfly.clustering.spi.LocalGroupServiceInstaller;
+import org.wildfly.clustering.service.Builder;
+import org.wildfly.clustering.spi.CacheGroupBuilderProvider;
+import org.wildfly.clustering.spi.CacheGroupServiceNameFactory;
+import org.wildfly.clustering.spi.GroupBuilderProvider;
+import org.wildfly.clustering.spi.LocalCacheGroupBuilderProvider;
+import org.wildfly.clustering.spi.LocalGroupBuilderProvider;
 import org.xnio.Option;
 import org.xnio.OptionMap;
 import org.xnio.Options;
@@ -123,11 +125,15 @@ public class EJB3RemoteServiceAdd extends AbstractAddStepHandler {
         if (!rootResource.hasChild(infinispanPath) || !rootResource.getChild(infinispanPath).hasChild(PathElement.pathElement("cache-container", BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME))) {
             // Install services that would normally be installed by this container/cache
             ModuleIdentifier module = Module.forClass(this.getClass()).getIdentifier();
-            for (GroupServiceInstaller installer: ServiceLoader.load(LocalGroupServiceInstaller.class, LocalGroupServiceInstaller.class.getClassLoader())) {
-                installer.install(target, BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME, module);
+            for (GroupBuilderProvider provider : ServiceLoader.load(LocalGroupBuilderProvider.class, LocalGroupBuilderProvider.class.getClassLoader())) {
+                for (Builder<?> builder : provider.getBuilders(BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME, module)) {
+                    builder.build(target).install();
+                }
             }
-            for (CacheServiceInstaller installer: ServiceLoader.load(LocalCacheServiceInstaller.class, LocalCacheServiceInstaller.class.getClassLoader())) {
-                installer.install(target, BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME, CacheServiceNameFactory.DEFAULT_CACHE);
+            for (CacheGroupBuilderProvider provider : ServiceLoader.load(LocalCacheGroupBuilderProvider.class, LocalCacheGroupBuilderProvider.class.getClassLoader())) {
+                for (Builder<?> builder : provider.getBuilders(BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME, CacheGroupServiceNameFactory.DEFAULT_CACHE)) {
+                    builder.build(target).install();
+                }
             }
         }
 
@@ -148,6 +154,7 @@ public class EJB3RemoteServiceAdd extends AbstractAddStepHandler {
                 .addDependency(TransactionSynchronizationRegistryService.SERVICE_NAME, TransactionSynchronizationRegistry.class, ejbRemoteConnectorService.getTxSyncRegistryInjector())
                 .addDependency(RemoteAsyncInvocationCancelStatusService.SERVICE_NAME, RemoteAsyncInvocationCancelStatusService.class, ejbRemoteConnectorService.getAsyncInvocationCancelStatusInjector())
                 .addDependency(remotingServerInfoServiceName, RemotingConnectorBindingInfoService.RemotingConnectorInfo.class, ejbRemoteConnectorService.getRemotingConnectorInfoInjectedValue())
+                .addDependency(SuspendController.SERVICE_NAME, SuspendController.class, ejbRemoteConnectorService.getSuspendControllerInjectedValue())
                 .setInitialMode(ServiceController.Mode.ACTIVE)
                 .install();
     }
@@ -168,11 +175,11 @@ public class EJB3RemoteServiceAdd extends AbstractAddStepHandler {
             for (final Property optionProperty : channelCreationOptions.asPropertyList()) {
                 final String name = optionProperty.getName();
                 final ModelNode propValueModel = optionProperty.getValue();
-                final String type = ChannelCreationOptionResource.CHANNEL_CREATION_OPTION_TYPE.resolveModelAttribute(context,propValueModel).asString();
+                final String type = RemoteConnectorChannelCreationOptionResource.CHANNEL_CREATION_OPTION_TYPE.resolveModelAttribute(context,propValueModel).asString();
                 final String optionClassName = this.getClassNameForChannelOptionType(type);
                 final String fullyQualifiedOptionName = optionClassName + "." + name;
                 final Option option = Option.fromString(fullyQualifiedOptionName, loader);
-                final String value = ChannelCreationOptionResource.CHANNEL_CREATION_OPTION_VALUE.resolveModelAttribute(context, propValueModel).asString();
+                final String value = RemoteConnectorChannelCreationOptionResource.CHANNEL_CREATION_OPTION_VALUE.resolveModelAttribute(context, propValueModel).asString();
                 builder.set(option, option.parseValue(value, loader));
             }
             return builder.getMap();

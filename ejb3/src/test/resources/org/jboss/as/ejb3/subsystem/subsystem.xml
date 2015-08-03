@@ -6,6 +6,10 @@
         <stateful default-access-timeout="${prop.default-access-timeout:5000}" cache-ref="distributable" passivation-disabled-cache-ref="simple"/>
         <singleton default-access-timeout="${prop.default-access-timeout:5000}"/>
     </session-bean>
+    <mdb>
+        <resource-adapter-ref resource-adapter-name="${ejb.resource-adapter-name:activemq-ra.rar}"/>
+        <bean-instance-pool-ref pool-name="mdb-strict-max-pool" />
+    </mdb>
     <entity-bean>
         <bean-instance-pool-ref pool-name="entity-strict-max-pool"/>
         <optimistic-locking enabled="true"/>
@@ -37,6 +41,16 @@
             <option name="READ_TIMEOUT" value="${prop.remoting-connector.read.timeout:20}" type="xnio"/>
             <option name="MAX_OUTBOUND_MESSAGES" value="1234" type="remoting"/>
         </channel-creation-options>
+        <profiles>
+            <profile name="profile">
+                <remoting-ejb-receiver  name="receiver" outbound-connection-ref="connection-ref" connect-timeout="5000">
+                    <channel-creation-options>
+                        <option name="READ_TIMEOUT" value="20" type="xnio"/>
+                        <option name="MAX_OUTBOUND_MESSAGES" value="1234" type="remoting"/>
+                    </channel-creation-options>
+                </remoting-ejb-receiver>
+            </profile>
+        </profiles>
     </remote>
 
     <!-- Session bean configurations -->
@@ -55,4 +69,5 @@
     <default-missing-method-permissions-deny-access value="false" />
     <disable-default-ejb-permissions value="true"/>
     <statistics enabled="${ejb.enable-statistics:true}" />
+    <log-system-exceptions value="${ejb.log-system-exceptions:false}" />
 </subsystem>

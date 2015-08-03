@@ -41,11 +41,13 @@ import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.test.integration.common.HttpRequest;
 import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
-import org.jboss.osgi.metadata.ManifestBuilder;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.Asset;
 import org.jboss.shrinkwrap.api.asset.EmptyAsset;
+import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
+import org.jboss.shrinkwrap.descriptor.api.Descriptors;
+import org.jboss.shrinkwrap.descriptor.api.spec.se.manifest.ManifestDescriptor;
 import org.junit.Assert;
 
 /**
@@ -61,14 +63,26 @@ public abstract class AbstractBatchTestCase {
                 .addClasses(TimeoutUtil.class)
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
                 .addAsWebInfResource(pkg, jobXml, "classes/META-INF/batch-jobs/" + jobXml)
-                        // Needed for the DebugLoggingSetup
-                .setManifest(new Asset() {
-                    public InputStream openStream() {
-                        ManifestBuilder builder = ManifestBuilder.newInstance();
-                        builder.addManifestHeader("Dependencies", "org.jboss.msc,org.wildfly.security.manager");
-                        return builder.openStream();
-                    }
-                });
+                .setManifest(new StringAsset(
+                        Descriptors.create(ManifestDescriptor.class)
+                                .attribute("Dependencies", "org.jboss.msc,org.wildfly.security.manager")
+                                .exportAsString()));
+    }
+
+
+    public static WebArchive createDefaultWar(final String warName, final Package pkg, final String... jobXmls) {
+        final WebArchive deployment = ShrinkWrap.create(WebArchive.class, warName)
+                .addPackage(AbstractBatchTestCase.class.getPackage())
+                .addClasses(TimeoutUtil.class)
+                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
+                .setManifest(new StringAsset(
+                        Descriptors.create(ManifestDescriptor.class)
+                                .attribute("Dependencies", "org.jboss.msc,org.wildfly.security.manager")
+                                .exportAsString()));
+        for (String jobXml : jobXmls) {
+            deployment.addAsWebInfResource(pkg, jobXml, "classes/META-INF/batch-jobs/" + jobXml);
+        }
+        return deployment;
     }
 
     protected static String performCall(final String url) throws ExecutionException, IOException, TimeoutException {

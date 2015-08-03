@@ -1,6 +1,6 @@
 /*
  * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
+ * Copyright 2014, Red Hat, Inc., and individual contributors
  * as indicated by the @author tags. See the copyright.txt file in the
  * distribution for a full listing of individual contributors.
  *
@@ -38,17 +38,16 @@ import static javax.xml.stream.XMLStreamConstants.SPACE;
 import static javax.xml.stream.XMLStreamConstants.START_DOCUMENT;
 import static javax.xml.stream.XMLStreamConstants.START_ELEMENT;
 
-import javax.xml.namespace.QName;
+import java.util.EnumSet;
+import java.util.Set;
+
 import javax.xml.stream.Location;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
 import org.jboss.as.ee.logging.EeLogger;
 import org.jboss.as.ee.metadata.EJBClientDescriptorMetaData;
+import org.jboss.metadata.property.PropertyReplacer;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
 
@@ -56,72 +55,19 @@ import org.jboss.staxmapper.XMLExtendedStreamReader;
  * Parser for urn:jboss:ejb-client:1.0:jboss-ejb-client
  *
  * @author Jaikiran Pai
+ * @author <a href="mailto:tadamski@redhat.com">Tomasz Adamski</a>
+ * @author <a href="mailto:wfink@redhat.com">Wolf-Dieter Fink</a>
  */
 class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescriptorMetaData> {
 
     public static final String NAMESPACE_1_0 = "urn:jboss:ejb-client:1.0";
 
-    public static final EJBClientDescriptor10Parser INSTANCE = new EJBClientDescriptor10Parser();
+    protected final PropertyReplacer propertyReplacer;
 
-
-    private EJBClientDescriptor10Parser() {
+    protected EJBClientDescriptor10Parser(final PropertyReplacer propertyReplacer) {
+        this.propertyReplacer = propertyReplacer;
     }
 
-
-    enum Element {
-        CLIENT_CONTEXT,
-        EJB_RECEIVERS,
-        JBOSS_EJB_CLIENT,
-        REMOTING_EJB_RECEIVER,
-        // default unknown element
-        UNKNOWN;
-
-        private static final Map<QName, Element> elements;
-
-        static {
-            Map<QName, Element> elementsMap = new HashMap<QName, Element>();
-            elementsMap.put(new QName(NAMESPACE_1_0, "jboss-ejb-client"), Element.JBOSS_EJB_CLIENT);
-            elementsMap.put(new QName(NAMESPACE_1_0, "client-context"), Element.CLIENT_CONTEXT);
-            elementsMap.put(new QName(NAMESPACE_1_0, "ejb-receivers"), Element.EJB_RECEIVERS);
-            elementsMap.put(new QName(NAMESPACE_1_0, "remoting-ejb-receiver"), Element.REMOTING_EJB_RECEIVER);
-            elements = elementsMap;
-        }
-
-        static Element of(QName qName) {
-            QName name;
-            if (qName.getNamespaceURI().equals("")) {
-                name = new QName(NAMESPACE_1_0, qName.getLocalPart());
-            } else {
-                name = qName;
-            }
-            final Element element = elements.get(name);
-            return element == null ? UNKNOWN : element;
-        }
-    }
-
-    enum Attribute {
-        EXCLUDE_LOCAL_RECEIVER,
-        LOCAL_RECEIVER_PASS_BY_VALUE,
-        OUTBOUND_CONNECTION_REF,
-
-        // default unknown attribute
-        UNKNOWN;
-
-        private static final Map<QName, Attribute> attributes;
-
-        static {
-            Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>();
-            attributesMap.put(new QName("exclude-local-receiver"), EXCLUDE_LOCAL_RECEIVER);
-            attributesMap.put(new QName("local-receiver-pass-by-value"), LOCAL_RECEIVER_PASS_BY_VALUE);
-            attributesMap.put(new QName("outbound-connection-ref"), OUTBOUND_CONNECTION_REF);
-            attributes = attributesMap;
-        }
-
-        static Attribute of(QName qName) {
-            final Attribute attribute = attributes.get(qName);
-            return attribute == null ? UNKNOWN : attribute;
-        }
-    }
 
     @Override
     public void readElement(final XMLExtendedStreamReader reader, final EJBClientDescriptorMetaData ejbClientDescriptorMetaData) throws XMLStreamException {
@@ -131,44 +77,14 @@ class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescripto
                     return;
                 }
                 case START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
+                    final EJBClientDescriptorXMLElement element = EJBClientDescriptorXMLElement.forName(reader.getLocalName());
 
                     switch (element) {
                         case CLIENT_CONTEXT:
                             this.parseClientContext(reader, ejbClientDescriptorMetaData);
                             break;
                         default:
-                            this.unexpectedElement(reader);
-                    }
-                    break;
-                }
-                default: {
-                    this.unexpectedContent(reader);
-                }
-            }
-        }
-        unexpectedEndOfDocument(reader.getLocation());
-    }
-
-    private void parseClientContext(final XMLExtendedStreamReader reader, final EJBClientDescriptorMetaData ejbClientDescriptorMetaData) throws XMLStreamException {
-        final Set<Element> visited = EnumSet.noneOf(Element.class);
-        while (reader.hasNext()) {
-            switch (reader.nextTag()) {
-                case END_ELEMENT: {
-                    return;
-                }
-                case START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
-                    if (visited.contains(element)) {
-                        this.unexpectedElement(reader);
-                    }
-                    visited.add(element);
-                    switch (element) {
-                        case EJB_RECEIVERS:
-                            this.parseEJBReceivers(reader, ejbClientDescriptorMetaData);
-                            break;
-                        default:
-                            this.unexpectedElement(reader);
+                            unexpectedElement(reader);
                     }
                     break;
                 }
@@ -180,22 +96,52 @@ class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescripto
         unexpectedEndOfDocument(reader.getLocation());
     }
 
-    private void parseEJBReceivers(final XMLExtendedStreamReader reader, final EJBClientDescriptorMetaData ejbClientDescriptorMetaData) throws XMLStreamException {
+    protected void parseClientContext(final XMLExtendedStreamReader reader, final EJBClientDescriptorMetaData ejbClientDescriptorMetaData) throws XMLStreamException {
+        final Set<EJBClientDescriptorXMLElement> visited = EnumSet.noneOf(EJBClientDescriptorXMLElement.class);
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case END_ELEMENT: {
+                    return;
+                }
+                case START_ELEMENT: {
+                    final EJBClientDescriptorXMLElement element = EJBClientDescriptorXMLElement.forName(reader.getLocalName());
+                    if (visited.contains(element)) {
+                        unexpectedElement(reader);
+                    }
+                    visited.add(element);
+                    switch (element) {
+                        case EJB_RECEIVERS:
+                            this.parseEJBReceivers(reader, ejbClientDescriptorMetaData);
+                            break;
+                        default:
+                            unexpectedElement(reader);
+                    }
+                    break;
+                }
+                default: {
+                    unexpectedContent(reader);
+                }
+            }
+        }
+        unexpectedEndOfDocument(reader.getLocation());
+    }
+
+    protected void parseEJBReceivers(final XMLExtendedStreamReader reader, final EJBClientDescriptorMetaData ejbClientDescriptorMetaData) throws XMLStreamException {
 
         // initialize the local-receiver-pass-by-value to the default true
         Boolean localReceiverPassByValue = null;
 
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
-            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
-            final String val = reader.getAttributeValue(i);
+            final EJBClientDescriptorXMLAttribute attribute = EJBClientDescriptorXMLAttribute.forName(reader.getAttributeLocalName(i));
+            final String value = readResolveValue(reader, i);
             switch (attribute) {
                 case EXCLUDE_LOCAL_RECEIVER:
-                    final boolean excludeLocalReceiver = Boolean.parseBoolean(val.trim());
+                    final boolean excludeLocalReceiver = Boolean.parseBoolean(value);
                     ejbClientDescriptorMetaData.setExcludeLocalReceiver(excludeLocalReceiver);
                     break;
                 case LOCAL_RECEIVER_PASS_BY_VALUE:
-                    localReceiverPassByValue = Boolean.parseBoolean(val.trim());
+                    localReceiverPassByValue = Boolean.parseBoolean(value);
                     break;
                 default:
                     unexpectedContent(reader);
@@ -209,13 +155,13 @@ class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescripto
                     return;
                 }
                 case START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
+                    final EJBClientDescriptorXMLElement element = EJBClientDescriptorXMLElement.forName(reader.getLocalName());
                     switch (element) {
                         case REMOTING_EJB_RECEIVER:
                             this.parseRemotingReceiver(reader, ejbClientDescriptorMetaData);
                             break;
                         default:
-                            this.unexpectedElement(reader);
+                            unexpectedElement(reader);
                     }
                     break;
                 }
@@ -227,16 +173,16 @@ class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescripto
         unexpectedEndOfDocument(reader.getLocation());
     }
 
-    private void parseRemotingReceiver(final XMLExtendedStreamReader reader, final EJBClientDescriptorMetaData ejbClientDescriptorMetaData) throws XMLStreamException {
+    protected void parseRemotingReceiver(final XMLExtendedStreamReader reader, final EJBClientDescriptorMetaData ejbClientDescriptorMetaData) throws XMLStreamException {
         String outboundConnectionRef = null;
-        final Set<Attribute> required = EnumSet.of(Attribute.OUTBOUND_CONNECTION_REF);
+        final Set<EJBClientDescriptorXMLAttribute> required = EnumSet.of(EJBClientDescriptorXMLAttribute.OUTBOUND_CONNECTION_REF);
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
-            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            final EJBClientDescriptorXMLAttribute attribute = EJBClientDescriptorXMLAttribute.forName(reader.getAttributeLocalName(i));
             required.remove(attribute);
             switch (attribute) {
                 case OUTBOUND_CONNECTION_REF:
-                    outboundConnectionRef = reader.getAttributeValue(i).trim();
+                    outboundConnectionRef = readResolveValue(reader, i);
                     ejbClientDescriptorMetaData.addRemotingReceiverConnectionRef(outboundConnectionRef);
                     break;
                 default:
@@ -253,13 +199,13 @@ class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescripto
         }
     }
 
-    private static void unexpectedEndOfDocument(final Location location) throws XMLStreamException {
+    protected static void unexpectedEndOfDocument(final Location location) throws XMLStreamException {
         throw EeLogger.ROOT_LOGGER.errorParsingEJBClientDescriptor("Unexpected end of document", location);
     }
 
-    private static void missingAttributes(final Location location, final Set<Attribute> required) throws XMLStreamException {
+    protected static void missingAttributes(final Location location, final Set<EJBClientDescriptorXMLAttribute> required) throws XMLStreamException {
         final StringBuilder b = new StringBuilder("Missing one or more required attributes:");
-        for (Attribute attribute : required) {
+        for (EJBClientDescriptorXMLAttribute attribute : required) {
             b.append(' ').append(attribute);
         }
         throw EeLogger.ROOT_LOGGER.errorParsingEJBClientDescriptor(b.toString(), location);
@@ -271,11 +217,11 @@ class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescripto
      * @param reader the stream reader
      * @throws XMLStreamException
      */
-    public static void unexpectedElement(final XMLExtendedStreamReader reader) throws XMLStreamException {
+    protected static void unexpectedElement(final XMLExtendedStreamReader reader) throws XMLStreamException {
         throw EeLogger.ROOT_LOGGER.unexpectedElement(reader.getName(), reader.getLocation());
     }
 
-    private static void unexpectedContent(final XMLStreamReader reader) throws XMLStreamException {
+    protected static void unexpectedContent(final XMLStreamReader reader) throws XMLStreamException {
         final String kind;
         switch (reader.getEventType()) {
             case ATTRIBUTE:
@@ -335,6 +281,10 @@ class EJBClientDescriptor10Parser implements XMLElementReader<EJBClientDescripto
             b.append(", text is: '").append(reader.getText()).append('\'');
         }
         throw EeLogger.ROOT_LOGGER.errorParsingEJBClientDescriptor(b.toString(), reader.getLocation());
+    }
+
+    protected String readResolveValue(final XMLExtendedStreamReader reader, final int index) {
+        return propertyReplacer.replaceProperties(reader.getAttributeValue(index).trim());
     }
 
 }

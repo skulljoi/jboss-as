@@ -24,13 +24,16 @@ package org.jboss.as.txn.subsystem;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
-import org.jboss.as.controller.ReloadRequiredRemoveStepHandler;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
@@ -46,13 +49,9 @@ import org.jboss.as.controller.registry.ImmutableManagementResourceRegistration;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.registry.Resource;
-import org.jboss.as.controller.services.path.PathResourceDefinition;
+import org.jboss.as.txn.logging.TransactionLogger;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * {@link org.jboss.as.controller.ResourceDefinition} for the root resource of the transaction subsystem.
@@ -116,19 +115,6 @@ public class TransactionSubsystemRootResourceDefinition extends SimpleResourceDe
             .setAllowExpression(true)
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SOCKET_CONFIG)
             .build();
-
-    public static final SimpleAttributeDefinition RELATIVE_TO = new SimpleAttributeDefinitionBuilder(PathResourceDefinition.RELATIVE_TO)
-            .setDefaultValue(new ModelNode().set("jboss.server.data.dir"))
-            .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
-            .setDeprecated(ModelVersion.create(1,4))
-            .setAllowExpression(true).build();
-
-    public static final SimpleAttributeDefinition PATH = new SimpleAttributeDefinitionBuilder(PathResourceDefinition.PATH)
-            .setDefaultValue(new ModelNode().set("var"))
-            .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
-            .setDeprecated(ModelVersion.create(1,4))
-            .setAllowNull(true)
-            .setAllowExpression(true).build();
 
     //coordinator environment
     public static final SimpleAttributeDefinition STATISTICS_ENABLED = new SimpleAttributeDefinitionBuilder(CommonAttributes.STATISTICS_ENABLED, ModelType.BOOLEAN, true)
@@ -236,7 +222,7 @@ public class TransactionSubsystemRootResourceDefinition extends SimpleResourceDe
     TransactionSubsystemRootResourceDefinition(boolean registerRuntimeOnly) {
         super(TransactionExtension.SUBSYSTEM_PATH,
                 TransactionExtension.getResourceDescriptionResolver(),
-                TransactionSubsystemAdd.INSTANCE, ReloadRequiredRemoveStepHandler.INSTANCE,
+                TransactionSubsystemAdd.INSTANCE, TransactionSubsystemRemove.INSTANCE,
                 OperationEntry.Flag.RESTART_ALL_SERVICES, OperationEntry.Flag.RESTART_ALL_SERVICES);
         this.registerRuntimeOnly = registerRuntimeOnly;
     }
@@ -244,7 +230,7 @@ public class TransactionSubsystemRootResourceDefinition extends SimpleResourceDe
     // all attributes
     static final AttributeDefinition[] attributes = new AttributeDefinition[] {
             BINDING, STATUS_BINDING, RECOVERY_LISTENER, NODE_IDENTIFIER, PROCESS_ID_UUID, PROCESS_ID_SOCKET_BINDING,
-            PROCESS_ID_SOCKET_MAX_PORTS, RELATIVE_TO, PATH, STATISTICS_ENABLED, ENABLE_TSM_STATUS, DEFAULT_TIMEOUT,
+            PROCESS_ID_SOCKET_MAX_PORTS, STATISTICS_ENABLED, ENABLE_TSM_STATUS, DEFAULT_TIMEOUT,
             OBJECT_STORE_RELATIVE_TO, OBJECT_STORE_PATH, JTS, USEHORNETQSTORE, USE_JDBC_STORE, JDBC_STORE_DATASOURCE,
             JDBC_ACTION_STORE_DROP_TABLE, JDBC_ACTION_STORE_TABLE_PREFIX, JDBC_COMMUNICATION_STORE_DROP_TABLE,
             JDBC_COMMUNICATION_STORE_TABLE_PREFIX, JDBC_STATE_STORE_DROP_TABLE, JDBC_STATE_STORE_TABLE_PREFIX,
@@ -253,7 +239,7 @@ public class TransactionSubsystemRootResourceDefinition extends SimpleResourceDe
 
     static final AttributeDefinition[] ATTRIBUTES_WITH_EXPRESSIONS_AFTER_1_1_0 = new AttributeDefinition[] {
             DEFAULT_TIMEOUT, STATISTICS_ENABLED, ENABLE_STATISTICS, ENABLE_TSM_STATUS, NODE_IDENTIFIER, OBJECT_STORE_PATH, OBJECT_STORE_RELATIVE_TO,
-            PATH, PROCESS_ID_SOCKET_BINDING, PROCESS_ID_SOCKET_MAX_PORTS, RECOVERY_LISTENER, RELATIVE_TO, BINDING, STATUS_BINDING
+            PROCESS_ID_SOCKET_BINDING, PROCESS_ID_SOCKET_MAX_PORTS, RECOVERY_LISTENER, BINDING, STATUS_BINDING
     };
 
     static final AttributeDefinition[] ATTRIBUTES_WITH_EXPRESSIONS_AFTER_1_1_1 = new AttributeDefinition[] {
@@ -272,6 +258,12 @@ public class TransactionSubsystemRootResourceDefinition extends SimpleResourceDe
         Set<AttributeDefinition> attributesWithoutMutuals = new HashSet<>(Arrays.asList(attributes));
         attributesWithoutMutuals.remove(USEHORNETQSTORE);
         attributesWithoutMutuals.remove(USE_JDBC_STORE);
+
+        attributesWithoutMutuals.remove(PROCESS_ID_UUID);
+        attributesWithoutMutuals.remove(PROCESS_ID_SOCKET_BINDING);
+        attributesWithoutMutuals.remove(PROCESS_ID_SOCKET_MAX_PORTS);
+
+
         OperationStepHandler writeHandler = new ReloadRequiredWriteAttributeHandler(attributesWithoutMutuals);
         for(final AttributeDefinition def : attributesWithoutMutuals) {
             resourceRegistration.registerReadWriteAttribute(def, null, writeHandler);
@@ -281,6 +273,12 @@ public class TransactionSubsystemRootResourceDefinition extends SimpleResourceDe
         OperationStepHandler mutualWriteHandler = new ObjectStoreMutualWriteHandler(USEHORNETQSTORE, USE_JDBC_STORE);
         resourceRegistration.registerReadWriteAttribute(USEHORNETQSTORE, null, mutualWriteHandler);
         resourceRegistration.registerReadWriteAttribute(USE_JDBC_STORE, null, mutualWriteHandler);
+
+        // Register mutual object store attributes
+        OperationStepHandler mutualProcessIdWriteHandler = new ProcessIdWriteHandler(PROCESS_ID_UUID, PROCESS_ID_SOCKET_BINDING, PROCESS_ID_SOCKET_MAX_PORTS);
+        resourceRegistration.registerReadWriteAttribute(PROCESS_ID_UUID, null, mutualProcessIdWriteHandler);
+        resourceRegistration.registerReadWriteAttribute(PROCESS_ID_SOCKET_BINDING, null, mutualProcessIdWriteHandler);
+        resourceRegistration.registerReadWriteAttribute(PROCESS_ID_SOCKET_MAX_PORTS, null, mutualProcessIdWriteHandler);
 
         EnableStatisticsHandler esh = new EnableStatisticsHandler();
         resourceRegistration.registerReadWriteAttribute(ENABLE_STATISTICS, esh, esh);
@@ -338,6 +336,69 @@ public class TransactionSubsystemRootResourceDefinition extends SimpleResourceDe
             }
         }
     }
+
+    private static class ProcessIdWriteHandler extends ReloadRequiredWriteAttributeHandler {
+        public ProcessIdWriteHandler(final AttributeDefinition... definitions) {
+            super(definitions);
+        }
+
+        @Override
+        protected void validateUpdatedModel(final OperationContext context, final Resource model) throws OperationFailedException {
+            context.addStep(model.getModel(), new OperationStepHandler() {
+                @Override
+                public void execute(OperationContext operationContext, ModelNode node) throws OperationFailedException {
+                    if (node.hasDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.getName()) && node.get(TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.getName()).asBoolean()) {
+                        if (node.hasDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING.getName())) {
+                            throw TransactionLogger.ROOT_LOGGER.mustBeUndefinedIfTrue(TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING.getName(), TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.getName());
+                        } else if (node.hasDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_MAX_PORTS.getName())) {
+                            throw TransactionLogger.ROOT_LOGGER.mustBeUndefinedIfTrue(TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_MAX_PORTS.getName(), TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.getName());
+                        }
+                    } else if (node.hasDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING.getName())) {
+                        //it's fine do nothing
+                    } else if (node.hasDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_MAX_PORTS.getName())) {
+                        throw TransactionLogger.ROOT_LOGGER.mustBedefinedIfDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING.getName(), TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_MAX_PORTS.getName());
+                    } else {
+                        // not uuid and also not sockets!
+                        throw TransactionLogger.ROOT_LOGGER.eitherTrueOrDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.getName(), TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING.getName());
+                    }
+
+                    context.stepCompleted();
+                }
+            }, OperationContext.Stage.MODEL);
+
+
+        }
+
+        @Override
+        protected void finishModelStage(final OperationContext context, final ModelNode operation, String attributeName,
+                                        ModelNode newValue, ModelNode oldValue, final Resource model) throws OperationFailedException {
+
+            if (attributeName.equals(PROCESS_ID_SOCKET_BINDING.getName())) {
+                if (newValue.isDefined()) {
+
+                    ModelNode resourceModel = model.getModel();
+                    if (resourceModel.hasDefined(PROCESS_ID_UUID.getName()) && resourceModel.get(PROCESS_ID_UUID.getName()).asBoolean()) {
+                        resourceModel.get(PROCESS_ID_UUID.getName()).set(new ModelNode(false));
+                    }
+                }
+            }
+
+            if (attributeName.equals(PROCESS_ID_UUID.getName())) {
+                if (newValue.asBoolean(false)) {
+
+                    ModelNode resourceModel = model.getModel();
+                    resourceModel.get(PROCESS_ID_SOCKET_BINDING.getName()).clear();
+                    resourceModel.get(PROCESS_ID_SOCKET_MAX_PORTS.getName()).clear();
+
+                }
+            }
+
+            validateUpdatedModel(context, model);
+        }
+
+
+    }
+
     @Override
     public void registerChildren(ManagementResourceRegistration resourceRegistration) {
         resourceRegistration.registerSubModel(new CMResourceResourceDefinition());

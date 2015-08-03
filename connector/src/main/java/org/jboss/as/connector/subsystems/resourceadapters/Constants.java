@@ -146,7 +146,7 @@ public class Constants {
 
     private static final String BEANVALIDATIONGROUPS_NAME = "beanvalidationgroups";
 
-    static final String ADMIN_OBJECTS_NAME = "admin-objects";
+    public static final String ADMIN_OBJECTS_NAME = "admin-objects";
 
     private static final String INTERLEAVING_NAME = "interleaving";
 
@@ -262,6 +262,12 @@ public class Constants {
             .setValidator(new EnumValidator<TransactionSupportEnum>(TransactionSupportEnum.class, true, true))
             .build();
 
+
+    static SimpleAttributeDefinition STATISTICS_ENABLED = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.STATISTICS_ENABLED, ModelType.BOOLEAN)
+                .setDefaultValue(new ModelNode(false))
+                .setAllowNull(true)
+                .setAllowExpression(true)
+                .build();
 
     static final SimpleAttributeDefinition WM_SECURITY = new SimpleAttributeDefinitionBuilder(WM_SECURITY_NAME, ModelType.BOOLEAN)
             .setAllowExpression(true)

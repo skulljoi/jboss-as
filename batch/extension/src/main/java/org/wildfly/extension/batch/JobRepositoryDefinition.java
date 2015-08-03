@@ -22,16 +22,15 @@
 
 package org.wildfly.extension.batch;
 
-import java.util.List;
-
 import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.DeprecationData;
+import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ReloadRequiredRemoveStepHandler;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
-import org.jboss.as.controller.ServiceVerificationHandler;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
@@ -39,7 +38,6 @@ import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.msc.service.ServiceController;
 import org.wildfly.extension.batch.job.repository.JobRepositoryFactory;
 import org.wildfly.extension.batch.job.repository.JobRepositoryType;
 
@@ -49,6 +47,7 @@ import org.wildfly.extension.batch.job.repository.JobRepositoryType;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+@Deprecated
 class JobRepositoryDefinition extends SimpleResourceDefinition {
 
     /**
@@ -62,6 +61,7 @@ class JobRepositoryDefinition extends SimpleResourceDefinition {
     public static final SimpleAttributeDefinition JNDI_NAME = SimpleAttributeDefinitionBuilder.create("jndi-name", ModelType.STRING, true)
             .setAllowExpression(true)
             .setValidator(new StringLengthValidator(1, true, true))
+            .setDeprecated(ModelVersion.create(1, 0, 0), false)
             .build();
 
     /**
@@ -70,8 +70,8 @@ class JobRepositoryDefinition extends SimpleResourceDefinition {
     public static final JobRepositoryDefinition JDBC = new JobRepositoryDefinition(JobRepositoryType.JDBC.toString(), JNDI_NAME);
 
     private JobRepositoryDefinition(final String name, final AttributeDefinition... attributes) {
-        super(PathElement.pathElement(NAME, name), BatchSubsystemDefinition.getResourceDescriptionResolver(NAME, name),
-                new JobRepositoryAdd(attributes), ReloadRequiredRemoveStepHandler.INSTANCE);
+        super(PathElement.pathElement(NAME, name), BatchResourceDescriptionResolver.getResourceDescriptionResolver(NAME, name),
+                new JobRepositoryAdd(attributes), ReloadRequiredRemoveStepHandler.INSTANCE, new DeprecationData(ModelVersion.create(1, 0, 0)));
     }
 
     @Override
@@ -86,7 +86,7 @@ class JobRepositoryDefinition extends SimpleResourceDefinition {
         }
 
         @Override
-        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final ServiceVerificationHandler verificationHandler, final List<ServiceController<?>> newControllers) throws OperationFailedException {
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
             final ModelNode jndiName = JNDI_NAME.resolveModelAttribute(context, model);
             if (jndiName.isDefined()) {
                 JobRepositoryFactory.getInstance().setJndiName(jndiName.asString());

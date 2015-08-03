@@ -33,11 +33,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.jboss.as.clustering.marshalling.MarshallingContext;
 import org.jboss.marshalling.Marshaller;
 import org.jboss.marshalling.Marshalling;
 import org.jboss.marshalling.Unmarshaller;
 import org.jgroups.Address;
+import org.jgroups.Channel;
 import org.jgroups.MembershipListener;
 import org.jgroups.MergeView;
 import org.jgroups.Message;
@@ -52,6 +52,7 @@ import org.wildfly.clustering.dispatcher.CommandDispatcher;
 import org.wildfly.clustering.dispatcher.CommandDispatcherFactory;
 import org.wildfly.clustering.group.Group;
 import org.wildfly.clustering.group.Node;
+import org.wildfly.clustering.marshalling.MarshallingContext;
 import org.wildfly.clustering.server.group.JGroupsNodeFactory;
 
 /**
@@ -75,7 +76,7 @@ public class ChannelCommandDispatcherFactory implements CommandDispatcherFactory
         this.nodeFactory = config.getNodeFactory();
         this.marshallingContext = config.getMarshallingContext();
         this.timeout = config.getTimeout();
-        final RpcDispatcher.Marshaller marshaller = new CommandResponseMarshaller(this.marshallingContext);
+        final RpcDispatcher.Marshaller marshaller = new CommandResponseMarshaller(config);
         this.dispatcher = new MessageDispatcher() {
             @Override
             protected RequestCorrelator createRequestCorrelator(Protocol transport, RequestHandler handler, Address localAddr) {
@@ -84,10 +85,12 @@ public class ChannelCommandDispatcherFactory implements CommandDispatcherFactory
                 return correlator;
             }
         };
-        this.dispatcher.setChannel(config.getChannel());
+        Channel channel = config.getChannel();
+        this.dispatcher.setChannel(channel);
         this.dispatcher.setRequestHandler(this);
         this.dispatcher.setMembershipListener(this);
         this.dispatcher.start();
+        this.view.compareAndSet(null, channel.getView());
     }
 
     @Override
@@ -105,7 +108,7 @@ public class ChannelCommandDispatcherFactory implements CommandDispatcherFactory
                 @SuppressWarnings("unchecked")
                 Command<Object, Object> command = (Command<Object, Object>) unmarshaller.readObject();
                 AtomicReference<Object> context = this.contexts.get(clientId);
-                if (context == null) return new NoSuchService();
+                if (context == null) return NoSuchService.INSTANCE;
                 return command.execute(context.get());
             }
         }
@@ -200,16 +203,18 @@ public class ChannelCommandDispatcherFactory implements CommandDispatcherFactory
     @Override
     public void viewAccepted(View view) {
         View oldView = this.view.getAndSet(view);
-        List<Node> oldNodes = this.getNodes(oldView);
-        List<Node> newNodes = this.getNodes(view);
+        if (oldView != null) {
+            List<Node> oldNodes = this.getNodes(oldView);
+            List<Node> newNodes = this.getNodes(view);
 
-        List<Address> leftMembers = View.leftMembers(oldView, view);
-        if (leftMembers != null) {
-            this.nodeFactory.invalidate(leftMembers);
-        }
+            List<Address> leftMembers = View.leftMembers(oldView, view);
+            if (leftMembers != null) {
+                this.nodeFactory.invalidate(leftMembers);
+            }
 
-        for (Listener listener: this.listeners) {
-            listener.membershipChanged(oldNodes, newNodes, view instanceof MergeView);
+            for (Listener listener: this.listeners) {
+                listener.membershipChanged(oldNodes, newNodes, view instanceof MergeView);
+            }
         }
     }
 

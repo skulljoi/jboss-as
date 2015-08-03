@@ -15,15 +15,13 @@
     <parent>
         <groupId>org.wildfly</groupId>
         <artifactId>wildfly-ts-integ</artifactId>
-        <version>9.0.0.Alpha2-SNAPSHOT</version>
+        <version>10.0.0.Beta1-SNAPSHOT</version>
     </parent>
 
     <!-- ********************************************************************************** -->
     <!-- ******************************** Basic Integration ******************************* -->
     <!-- ********************************************************************************** -->
-    <groupId>org.wildfly</groupId>
     <artifactId>wildfly-ts-integ-basic</artifactId>
-    <version>9.0.0.Alpha2-SNAPSHOT</version>
 
     <name>WildFly Test Suite: Integration - Basic</name>
 
@@ -48,6 +46,11 @@
         <dependency>
             <groupId>io.undertow</groupId>
             <artifactId>undertow-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.hornetq</groupId>
+            <artifactId>hornetq-jms-client</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -187,6 +190,8 @@
                                         <jboss.inst>${basedir}/target/jbossas</jboss.inst>
                                         <!-- Needed for the IIOP tests-->
                                         <com.sun.CORBA.ORBUseDynamicStub>true</com.sun.CORBA.ORBUseDynamicStub>
+                                        <!-- EJB client library hack, see WFLY-4973-->
+                                        <org.jboss.ejb.client.wildfly-testsuite-hack>true</org.jboss.ejb.client.wildfly-testsuite-hack>
                                     </systemPropertyVariables>
 
                                     <additionalClasspathElements>
@@ -240,6 +245,8 @@
                                     <systemPropertyVariables combine.children="append">
                                         <jboss.server.config.file.name>standalone.xml</jboss.server.config.file.name>
                                         <jboss.inst>${basedir}/target/jbossas</jboss.inst>
+                                        <!-- EJB client library hack, see WFLY-4973-->
+                                        <org.jboss.ejb.client.wildfly-testsuite-hack>true</org.jboss.ejb.client.wildfly-testsuite-hack>
                                     </systemPropertyVariables>
 
                                     <additionalClasspathElements>
@@ -265,6 +272,10 @@
                                     <excludes>
                                         <exclude>none</exclude>
                                     </excludes>
+                                    <systemPropertyVariables>
+                                        <!-- EJB client library hack, see WFLY-4973-->
+                                        <org.jboss.ejb.client.wildfly-testsuite-hack>true</org.jboss.ejb.client.wildfly-testsuite-hack>
+                                    </systemPropertyVariables>
                                 </configuration>
                             </execution>
 
@@ -284,6 +295,8 @@
                                     <systemPropertyVariables combine.children="append">
                                         <jboss.server.config.file.name>standalone.xml</jboss.server.config.file.name>
                                         <jboss.inst>${basedir}/target/jbossas</jboss.inst>
+                                        <!-- EJB client library hack, see WFLY-4973-->
+                                        <org.jboss.ejb.client.wildfly-testsuite-hack>true</org.jboss.ejb.client.wildfly-testsuite-hack>
                                     </systemPropertyVariables>
 
                                     <additionalClasspathElements>
@@ -334,6 +347,8 @@
                                     <redirectTestOutputToFile>false</redirectTestOutputToFile>
                                     <systemPropertyVariables combine.children="append">
                                         <jboss.server.config.file.name>standalone-full.xml</jboss.server.config.file.name>
+                                        <!-- EJB client library hack, see WFLY-4973-->
+                                        <org.jboss.ejb.client.wildfly-testsuite-hack>true</org.jboss.ejb.client.wildfly-testsuite-hack>
                                     </systemPropertyVariables>
                                     <includes>
                                         <include>**/*TestCase.java</include>
@@ -349,49 +364,6 @@
                 </plugins>
             </build>
         </profile>
-
-        <!-- IIOP/CORBA stub generation - manual stub generation for IBM JDK -->
-        <profile>
-            <id>ibmjdk.profile</id>
-            <activation>
-                <property>
-                    <name>java.vendor</name>
-                    <value>IBM Corporation</value>
-                </property>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <version>${version.exec.maven.plugin}</version>
-                        <executions>
-                            <!-- There is no similar option as -Dcom.sun.CORBA.ORBUseDynamicStub=true for IBM JDK
-                                  we need to create stub do it manually with rmic tools -->
-                            <execution>
-                                <id>ibmjdk.iiop.stub-creation</id>
-                                <phase>test-compile</phase>
-                                <goals>
-                                    <goal>exec</goal>
-                                </goals>
-                                <configuration>
-                                    <executable>rmic</executable>
-                                    <workingDirectory>target/test-classes</workingDirectory>
-                                    <arguments>
-                                        <argument>-iiop</argument>
-                                        <argument>-classpath</argument>
-                                        <argument>${jboss.dist}/bin/client/jboss-client.jar:.</argument>
-                                        <argument>org.jboss.as.test.integration.ejb.iiop.naming.IIOPNamingHome</argument>
-                                        <argument>org.jboss.as.test.integration.ejb.iiop.naming.IIOPStatefulNamingHome</argument>
-                                    </arguments>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-
 
         <!-- When -Dtest=... is set, only the default surefire execution with standalone-full.xml will run. -->
         <profile>
@@ -431,6 +403,49 @@
             </build>
         </profile>
 
+         <!-- IIOP/CORBA stub generation - manual stub generation for IBM JDK -->
+        <profile>
+            <id>ibmjdk.profile</id>
+            <activation>
+                <property>
+                    <name>java.vendor</name>
+                    <value>IBM Corporation</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>${version.exec.maven.plugin}</version>
+                        <executions>
+                            <!-- There is no similar option as -Dcom.sun.CORBA.ORBUseDynamicStub=true for IBM JDK
+                            we need to create stub do it manually with rmic tools -->
+                            <execution>
+                                <id>ibmjdk.iiop.stub-creation</id>
+                                <phase>test-compile</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>rmic</executable>
+                                    <workingDirectory>target/test-classes</workingDirectory>
+                                    <arguments>
+                                        <argument>-iiop</argument>
+                                        <argument>-classpath</argument>
+                                        <argument>${jboss.dist}/bin/client/jboss-client.jar:.</argument>
+                                        <argument>org.jboss.as.test.integration.ejb.iiop.naming.IIOPNamingHome
+                                        </argument>
+                                        <argument>org.jboss.as.test.integration.ejb.iiop.naming.IIOPStatefulNamingHome
+                                        </argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 
 </project>

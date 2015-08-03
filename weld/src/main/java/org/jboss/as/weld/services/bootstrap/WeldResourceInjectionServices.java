@@ -21,17 +21,10 @@
  */
 package org.jboss.as.weld.services.bootstrap;
 
-import org.jboss.as.ee.component.EEDefaultResourceJndiNames;
-import org.jboss.as.ee.component.EEModuleDescription;
-import org.jboss.as.naming.deployment.ContextNames;
-import org.jboss.as.naming.deployment.ContextNames.BindInfo;
-import org.jboss.as.weld.logging.WeldLogger;
-import org.jboss.as.weld.util.ResourceInjectionUtilities;
-import org.jboss.msc.service.ServiceRegistry;
-import org.jboss.weld.injection.spi.ResourceInjectionServices;
-import org.jboss.weld.injection.spi.ResourceReference;
-import org.jboss.weld.injection.spi.ResourceReferenceFactory;
-import org.jboss.weld.injection.spi.helpers.SimpleResourceReference;
+import static org.jboss.as.weld.util.ResourceInjectionUtilities.getResourceAnnotated;
+
+import java.lang.reflect.Member;
+import java.lang.reflect.Method;
 
 import javax.annotation.Resource;
 import javax.ejb.TimerService;
@@ -45,10 +38,19 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 
-import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-
-import static org.jboss.as.weld.util.ResourceInjectionUtilities.getResourceAnnotated;
+import org.jboss.as.ee.component.EEDefaultResourceJndiNames;
+import org.jboss.as.ee.component.EEModuleDescription;
+import org.jboss.as.naming.deployment.ContextNames;
+import org.jboss.as.naming.deployment.ContextNames.BindInfo;
+import org.jboss.as.weld.logging.WeldLogger;
+import org.jboss.as.weld.util.ResourceInjectionUtilities;
+import org.jboss.modules.Module;
+import org.jboss.msc.service.ServiceRegistry;
+import org.jboss.weld.injection.spi.ResourceInjectionServices;
+import org.jboss.weld.injection.spi.ResourceReference;
+import org.jboss.weld.injection.spi.ResourceReferenceFactory;
+import org.jboss.weld.injection.spi.helpers.SimpleResourceReference;
+import org.jboss.ws.common.injection.ThreadLocalAwareWebServiceContext;
 
 public class WeldResourceInjectionServices extends AbstractResourceInjectionServices implements ResourceInjectionServices {
 
@@ -70,6 +72,8 @@ public class WeldResourceInjectionServices extends AbstractResourceInjectionServ
     private static final String EJB_SESSION_CONTEXT_CLASS_NAME = "javax.ejb.SessionContext";
     private static final String EJB_MESSAGE_DRIVEN_CONTEXT_CLASS_NAME = "javax.ejb.MessageDrivenContext";
     private static final String EJB_ENTITY_CONTEXT_CLASS_NAME = "javax.ejb.EntityContext";
+
+    private static final String WEB_SERVICE_CONTEXT_CLASS_NAME = "javax.xml.ws.WebServiceContext";
 
     private final Context context;
 
@@ -93,6 +97,11 @@ public class WeldResourceInjectionServices extends AbstractResourceInjectionServ
                     EJB_MESSAGE_DRIVEN_CONTEXT_CLASS_NAME.equals(typeName) ||
                     EJB_ENTITY_CONTEXT_CLASS_NAME.equals(typeName)) {
                 return EJB_CONTEXT_LOCATION;
+            }  else if (WEB_SERVICE_CONTEXT_CLASS_NAME.equals(typeName)) {
+                //horrible hack
+                //there is not actually a binding we can use for this
+                //the whole CDI+bindings thing will likely be reviewed in EE8
+                return WEB_SERVICE_CONTEXT_CLASS_NAME;
             }  else {
                 // EE default bindings
                 EEDefaultResourceJndiNames eeDefaultResourceJndiNames = moduleDescription.getDefaultResourceJndiNames();
@@ -114,8 +123,8 @@ public class WeldResourceInjectionServices extends AbstractResourceInjectionServ
         return proposedName;
     }
 
-    public WeldResourceInjectionServices(final ServiceRegistry serviceRegistry, final EEModuleDescription moduleDescription) {
-        super(serviceRegistry, moduleDescription);
+    public WeldResourceInjectionServices(final ServiceRegistry serviceRegistry, final EEModuleDescription moduleDescription, Module module) {
+        super(serviceRegistry, moduleDescription, module);
         try {
             this.context = new InitialContext();
         } catch (NamingException e) {
@@ -192,6 +201,11 @@ public class WeldResourceInjectionServices extends AbstractResourceInjectionServ
             throw WeldLogger.ROOT_LOGGER.injectionPointNotAJavabean((Method) member);
         }
         String name = getResourceName(injectionPoint);
+        //horrible hack
+        //we don't have anywhere we can look this up
+        if(name.equals(WEB_SERVICE_CONTEXT_CLASS_NAME)) {
+            return ThreadLocalAwareWebServiceContext.getInstance();
+        }
         try {
             return context.lookup(name);
         } catch (NamingException e) {

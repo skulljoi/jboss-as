@@ -107,7 +107,7 @@ public class StandardConfigsXMLValidationUnitTestCase extends AbstractValidation
         parseXml("standalone/configuration/standalone-full.xml");
     }
 
-  //TODO Leave commented out until domain-jts.xml is definitely removed from the configuration
+    //TODO Leave commented out until domain-jts.xml is definitely removed from the configuration
 //    @Test
 //    public void testDomainJTS() throws Exception {
 //        parseXml("docs/examples/configs/domain-jts.xml");
@@ -131,11 +131,6 @@ public class StandardConfigsXMLValidationUnitTestCase extends AbstractValidation
     @Test
     public void testStandaloneGossipFullHA() throws Exception {
         parseXml("docs/examples/configs/standalone-gossip-full-ha.xml");
-    }
-
-    @Test
-    public void testHornetQColocated() throws Exception {
-        parseXml("docs/examples/configs/standalone-hornetq-colocated.xml");
     }
 
     @Test
@@ -209,6 +204,7 @@ public class StandardConfigsXMLValidationUnitTestCase extends AbstractValidation
         String result = line.replace("${jboss.management.native.port:9999}", "9999");
         result = result.replace("${jboss.management.http.port:9990}", "9990");
         result = result.replace("${jboss.management.https.port:9993}", "9993");
+        result = result.replace("${jboss.domain.master.protocol:remote}", "remote");
         result = result.replace("${jboss.domain.master.port:9999}", "9999");
         result = result.replace("${jboss.messaging.group.port:9876}", "9876");
         result = result.replace("${jboss.socket.binding.port-offset:0}", "0");

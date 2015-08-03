@@ -70,7 +70,7 @@ class DefaultComponentConfigurator extends AbstractComponentConfigurator impleme
         }
 
 
-        destructors.addLast(new ImmediateInterceptorFactory(new ManagedReferenceReleaseInterceptor(BasicComponentInstance.INSTANCE_KEY)));
+        destructors.add(new ImmediateInterceptorFactory(new ManagedReferenceReleaseInterceptor(BasicComponentInstance.INSTANCE_KEY)));
 
         new ClassDescriptionTraversal(configuration.getComponentClass(), applicationClasses) {
             @Override
@@ -86,29 +86,32 @@ class DefaultComponentConfigurator extends AbstractComponentConfigurator impleme
 
                 final InterceptorClassDescription interceptorConfig = InterceptorClassDescription.merge(ComponentDescription.mergeInterceptorConfig(clazz, classDescription, description, metadataComplete), moduleDescription.getInterceptorClassOverride(clazz.getName()));
 
-                handleClassMethod(clazz, interceptorConfig.getAroundInvoke(), componentUserAroundInvoke, false, false);
+                handleClassMethod(clazz, interceptorConfig.getAroundInvoke(), componentUserAroundInvoke, false, false, configuration);
 
                 if (description.isTimerServiceRequired()) {
-                    handleClassMethod(clazz, interceptorConfig.getAroundTimeout(), componentUserAroundTimeout, false, false);
+                    handleClassMethod(clazz, interceptorConfig.getAroundTimeout(), componentUserAroundTimeout, false, false, configuration);
                 }
                 if (!description.isIgnoreLifecycleInterceptors()) {
-                    handleClassMethod(clazz, interceptorConfig.getPostConstruct(), userPostConstruct, true, true);
-                    handleClassMethod(clazz, interceptorConfig.getPreDestroy(), userPreDestroy, true, true);
+                    handleClassMethod(clazz, interceptorConfig.getPostConstruct(), userPostConstruct, true, true, configuration);
+                    handleClassMethod(clazz, interceptorConfig.getPreDestroy(), userPreDestroy, true, true, configuration);
 
 
                     if (description.isPassivationApplicable()) {
-                        handleClassMethod(clazz, interceptorConfig.getPrePassivate(), componentUserPrePassivate, false, false);
-                        handleClassMethod(clazz, interceptorConfig.getPostActivate(), componentUserPostActivate, false, false);
+                        handleClassMethod(clazz, interceptorConfig.getPrePassivate(), componentUserPrePassivate, false, true, configuration);
+                        handleClassMethod(clazz, interceptorConfig.getPostActivate(), componentUserPostActivate, false, true, configuration);
                     }
                 }
             }
 
-            private void handleClassMethod(final Class<?> clazz, final MethodIdentifier methodIdentifier, final List<InterceptorFactory> interceptors, boolean changeMethod, boolean lifecycleMethod) throws DeploymentUnitProcessingException {
+            private void handleClassMethod(final Class<?> clazz, final MethodIdentifier methodIdentifier, final List<InterceptorFactory> interceptors, boolean changeMethod, boolean lifecycleMethod, ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
                 if (methodIdentifier != null) {
                     final Method method = ClassReflectionIndexUtil.findRequiredMethod(deploymentReflectionIndex, clazz, methodIdentifier);
                     if (isNotOverriden(clazz, method, configuration.getComponentClass(), deploymentReflectionIndex)) {
                         InterceptorFactory interceptorFactory = new ImmediateInterceptorFactory(new ManagedReferenceLifecycleMethodInterceptor(BasicComponentInstance.INSTANCE_KEY, method, changeMethod, lifecycleMethod));
                         interceptors.add(interceptorFactory);
+                        if(lifecycleMethod) {
+                            configuration.addLifecycleMethod(method);
+                        }
                     }
                 }
             }
@@ -120,11 +123,11 @@ class DefaultComponentConfigurator extends AbstractComponentConfigurator impleme
 
 
         if (!injectors.isEmpty()) {
-            configuration.addPostConstructInterceptor(weaved(injectors), InterceptorOrder.ComponentPostConstruct.COMPONENT_RESOURCE_INJECTION_INTERCEPTORS);
+            configuration.addPostConstructInterceptors(new ArrayList<>(injectors), InterceptorOrder.ComponentPostConstruct.COMPONENT_RESOURCE_INJECTION_INTERCEPTORS);
         }
         // Apply post-construct
         if (!userPostConstruct.isEmpty()) {
-            configuration.addPostConstructInterceptor(weaved(userPostConstruct), InterceptorOrder.ComponentPostConstruct.COMPONENT_USER_INTERCEPTORS);
+            configuration.addPostConstructInterceptors(userPostConstruct, InterceptorOrder.ComponentPostConstruct.COMPONENT_USER_INTERCEPTORS);
         }
         configuration.addPostConstructInterceptor(Interceptors.getTerminalInterceptorFactory(), InterceptorOrder.ComponentPostConstruct.TERMINAL_INTERCEPTOR);
         configuration.addPostConstructInterceptor(tcclInterceptor, InterceptorOrder.ComponentPostConstruct.TCCL_INTERCEPTOR);
@@ -132,13 +135,13 @@ class DefaultComponentConfigurator extends AbstractComponentConfigurator impleme
 
         // Apply pre-destroy
         if (!uninjectors.isEmpty()) {
-            configuration.addPreDestroyInterceptor(weaved(uninjectors), InterceptorOrder.ComponentPreDestroy.COMPONENT_UNINJECTION_INTERCEPTORS);
+            configuration.addPreDestroyInterceptors(new ArrayList<>(uninjectors), InterceptorOrder.ComponentPreDestroy.COMPONENT_UNINJECTION_INTERCEPTORS);
         }
         if (!destructors.isEmpty()) {
-            configuration.addPreDestroyInterceptor(weaved(destructors), InterceptorOrder.ComponentPreDestroy.COMPONENT_DESTRUCTION_INTERCEPTORS);
+            configuration.addPreDestroyInterceptors(new ArrayList<>(destructors), InterceptorOrder.ComponentPreDestroy.COMPONENT_DESTRUCTION_INTERCEPTORS);
         }
         if (!userPreDestroy.isEmpty()) {
-            configuration.addPreDestroyInterceptor(weaved(userPreDestroy), InterceptorOrder.ComponentPreDestroy.COMPONENT_USER_INTERCEPTORS);
+            configuration.addPreDestroyInterceptors(userPreDestroy, InterceptorOrder.ComponentPreDestroy.COMPONENT_USER_INTERCEPTORS);
         }
         configuration.addPreDestroyInterceptor(Interceptors.getTerminalInterceptorFactory(), InterceptorOrder.ComponentPreDestroy.TERMINAL_INTERCEPTOR);
         configuration.addPreDestroyInterceptor(tcclInterceptor, InterceptorOrder.ComponentPreDestroy.TCCL_INTERCEPTOR);
@@ -146,13 +149,13 @@ class DefaultComponentConfigurator extends AbstractComponentConfigurator impleme
 
         if (description.isPassivationApplicable()) {
             if (!componentUserPrePassivate.isEmpty()) {
-                configuration.addPrePassivateInterceptor(weaved(componentUserPrePassivate), InterceptorOrder.ComponentPassivation.COMPONENT_USER_INTERCEPTORS);
+                configuration.addPrePassivateInterceptors(componentUserPrePassivate, InterceptorOrder.ComponentPassivation.COMPONENT_USER_INTERCEPTORS);
             }
             configuration.addPrePassivateInterceptor(Interceptors.getTerminalInterceptorFactory(), InterceptorOrder.ComponentPassivation.TERMINAL_INTERCEPTOR);
             configuration.addPrePassivateInterceptor(tcclInterceptor, InterceptorOrder.ComponentPassivation.TCCL_INTERCEPTOR);
             configuration.addPrePassivateInterceptor(privilegedInterceptor, InterceptorOrder.ComponentPassivation.PRIVILEGED_INTERCEPTOR);
             if (!componentUserPostActivate.isEmpty()) {
-                configuration.addPostActivateInterceptor(weaved(componentUserPostActivate), InterceptorOrder.ComponentPassivation.COMPONENT_USER_INTERCEPTORS);
+                configuration.addPostActivateInterceptors(componentUserPostActivate, InterceptorOrder.ComponentPassivation.COMPONENT_USER_INTERCEPTORS);
             }
             configuration.addPostActivateInterceptor(Interceptors.getTerminalInterceptorFactory(), InterceptorOrder.ComponentPassivation.TERMINAL_INTERCEPTOR);
             configuration.addPostActivateInterceptor(tcclInterceptor, InterceptorOrder.ComponentPassivation.TCCL_INTERCEPTOR);
@@ -173,8 +176,12 @@ class DefaultComponentConfigurator extends AbstractComponentConfigurator impleme
 
                 // first add the default interceptors (if not excluded) to the deque
                 final boolean requiresTimerChain = description.isTimerServiceRequired() && timeoutMethods.contains(identifier);
+                if(requiresTimerChain) {
+                    configuration.addComponentInterceptor(method, new UserInterceptorFactory(weaved(componentUserAroundInvoke), weaved(componentUserAroundTimeout)), InterceptorOrder.Component.COMPONENT_USER_INTERCEPTORS);
+                } else {
+                    configuration.addComponentInterceptors(method, componentUserAroundInvoke, InterceptorOrder.Component.COMPONENT_USER_INTERCEPTORS);
+                }
 
-                configuration.addComponentInterceptor(method, new UserInterceptorFactory(weaved(componentUserAroundInvoke), weaved(requiresTimerChain ? componentUserAroundTimeout : null)), InterceptorOrder.Component.COMPONENT_USER_INTERCEPTORS);
             }
         }
 

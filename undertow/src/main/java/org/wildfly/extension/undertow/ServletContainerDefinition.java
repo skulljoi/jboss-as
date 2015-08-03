@@ -43,9 +43,7 @@ import org.jboss.dmr.ModelType;
 /**
  * @author <a href="mailto:tomaz.cerar@redhat.com">Tomaz Cerar</a> (c) 2013 Red Hat Inc.
  */
-public class ServletContainerDefinition extends PersistentResourceDefinition {
-    static final ServletContainerDefinition INSTANCE = new ServletContainerDefinition();
-
+class ServletContainerDefinition extends PersistentResourceDefinition {
     protected static final SimpleAttributeDefinition ALLOW_NON_STANDARD_WRAPPERS =
             new SimpleAttributeDefinitionBuilder(Constants.ALLOW_NON_STANDARD_WRAPPERS, ModelType.BOOLEAN, true)
                     .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
@@ -97,7 +95,7 @@ public class ServletContainerDefinition extends PersistentResourceDefinition {
                     .build();
 
     protected static final AttributeDefinition DEFAULT_SESSION_TIMEOUT =
-            new SimpleAttributeDefinitionBuilder("default-session-timeout", ModelType.INT, true)
+            new SimpleAttributeDefinitionBuilder(Constants.DEFAULT_SESSION_TIMEOUT, ModelType.INT, true)
                     .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
                     .setAllowExpression(true)
                     .setMeasurementUnit(MeasurementUnit.MINUTES)
@@ -112,9 +110,14 @@ public class ServletContainerDefinition extends PersistentResourceDefinition {
                     .setDefaultValue(new ModelNode(true))
                     .build(); //30 minutes
 
+    protected static final AttributeDefinition DIRECTORY_LISTING =
+            new SimpleAttributeDefinitionBuilder(Constants.DIRECTORY_LISTING, ModelType.BOOLEAN, true)
+                    .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
+                    .setAllowExpression(true)
+                    .build(); //30 minutes
 
     private static final List<? extends PersistentResourceDefinition> CHILDREN;
-    private static final Collection<AttributeDefinition> ATTRIBUTES = Arrays.asList(
+    static final Collection<AttributeDefinition> ATTRIBUTES = Arrays.asList(
             ALLOW_NON_STANDARD_WRAPPERS,
             DEFAULT_BUFFER_CACHE,
             STACK_TRACE_ON_ERROR,
@@ -123,8 +126,11 @@ public class ServletContainerDefinition extends PersistentResourceDefinition {
             IGNORE_FLUSH,
             EAGER_FILTER_INIT,
             DEFAULT_SESSION_TIMEOUT,
-            DISABLE_CACHING_FOR_SECURED_PAGES
+            DISABLE_CACHING_FOR_SECURED_PAGES,
+            DIRECTORY_LISTING
             );
+
+    static final ServletContainerDefinition INSTANCE = new ServletContainerDefinition();
 
     static {
         List<PersistentResourceDefinition>  children = new ArrayList<>();
@@ -132,6 +138,8 @@ public class ServletContainerDefinition extends PersistentResourceDefinition {
         children.add(SessionCookieDefinition.INSTANCE);
         children.add(PersistentSessionsDefinition.INSTANCE);
         children.add(WebsocketsDefinition.INSTANCE);
+        children.add(MimeMappingDefinition.INSTANCE);
+        children.add(WelcomeFileDefinition.INSTANCE);
         CHILDREN = Collections.unmodifiableList(children);
     }
 

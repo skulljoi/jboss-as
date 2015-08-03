@@ -39,13 +39,11 @@
         <module name="javax.api"/>
         <module name="javax.rmi.api"/>
         <module name="javax.transaction.api"/>
-        <module name="org.jacorb"/>
         <module name="org.jboss.as.controller"/>
         <module name="org.jboss.as.naming"/>
         <module name="org.jboss.as.network"/>
-        <module name="org.wildfly.security.manager"/>
+        <module name="org.wildfly.security.elytron"/>
         <module name="org.jboss.as.server"/>
-        <module name="org.jboss.common-core"/>
         <module name="org.jboss.logging"/>
         <module name="org.jboss.metadata.common"/>
         <module name="org.jboss.metadata.ejb"/>
@@ -55,5 +53,6 @@
         <module name="org.jboss.jts" />
         <module name="org.jboss.jts.integration"/>
         <module name="org.picketbox"/>
+        <module name="org.wildfly.iiop-openjdk"/>
     </dependencies>
 </module>

@@ -36,8 +36,6 @@ import org.jboss.msc.service.ServiceRegistry;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.ValueInjectionService;
 
-import java.util.List;
-
 /**
  * @author Jaikiran Pai
  */
@@ -56,7 +54,7 @@ class EJBRemoteInvocationPassByValueWriteHandler extends AbstractWriteAttributeH
     protected boolean applyUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName,
                                            ModelNode resolvedValue, ModelNode currentValue, HandbackHolder<Void> handbackHolder) throws OperationFailedException {
         final ModelNode model = context.readResource(PathAddress.EMPTY_ADDRESS).getModel();
-        updateDefaultLocalEJBReceiverService(context, model, null);
+        updateDefaultLocalEJBReceiverService(context, model);
 
         return false;
     }
@@ -66,10 +64,10 @@ class EJBRemoteInvocationPassByValueWriteHandler extends AbstractWriteAttributeH
                                          ModelNode valueToRestore, ModelNode valueToRevert, Void handback) throws OperationFailedException {
         final ModelNode restored = context.readResource(PathAddress.EMPTY_ADDRESS).getModel().clone();
         restored.get(attributeName).set(valueToRestore);
-        updateDefaultLocalEJBReceiverService(context, restored, null);
+        updateDefaultLocalEJBReceiverService(context, restored);
     }
 
-    void updateDefaultLocalEJBReceiverService(final OperationContext context, final ModelNode model, List<ServiceController<?>> newControllers) throws OperationFailedException {
+    void updateDefaultLocalEJBReceiverService(final OperationContext context, final ModelNode model) throws OperationFailedException {
 
         final ModelNode passByValueModel = this.attributeDefinition.resolveModelAttribute(context, model);
         final ServiceRegistry registry = context.getServiceRegistry(true);
@@ -92,13 +90,10 @@ class EJBRemoteInvocationPassByValueWriteHandler extends AbstractWriteAttributeH
         final ServiceTarget serviceTarget = context.getServiceTarget();
         // now install the new default local EJB receiver service which points to an existing Local EJB receiver service
         final ValueInjectionService<LocalEjbReceiver> newDefaultLocalEJBReceiverService = new ValueInjectionService<LocalEjbReceiver>();
-        final ServiceBuilder defaultLocalEJBReceiverServiceBuilder = serviceTarget.addService(LocalEjbReceiver.DEFAULT_LOCAL_EJB_RECEIVER_SERVICE_NAME, newDefaultLocalEJBReceiverService);
+        final ServiceBuilder<LocalEjbReceiver> defaultLocalEJBReceiverServiceBuilder = serviceTarget.addService(LocalEjbReceiver.DEFAULT_LOCAL_EJB_RECEIVER_SERVICE_NAME, newDefaultLocalEJBReceiverService);
         defaultLocalEJBReceiverServiceBuilder.addDependency(localEJBReceiverServiceName, LocalEjbReceiver.class, newDefaultLocalEJBReceiverService.getInjector());
         // install the service
-        final ServiceController defaultLocalEJBReceiverServiceController = defaultLocalEJBReceiverServiceBuilder.install();
-        if (newControllers != null) {
-            newControllers.add(defaultLocalEJBReceiverServiceController);
-        }
+        final ServiceController<LocalEjbReceiver> defaultLocalEJBReceiverServiceController = defaultLocalEJBReceiverServiceBuilder.install();
     }
 
 }

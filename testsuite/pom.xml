@@ -55,12 +55,10 @@
     <parent>
         <groupId>org.wildfly</groupId>
         <artifactId>wildfly-parent</artifactId>
-        <version>9.0.0.Alpha2-SNAPSHOT</version>
+        <version>10.0.0.Beta1-SNAPSHOT</version>
     </parent>
 
-    <groupId>org.wildfly</groupId>
     <artifactId>wildfly-testsuite</artifactId>
-    <version>9.0.0.Alpha2-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>WildFly Test Suite: Aggregator</name>
@@ -110,11 +108,10 @@
         <jvm.args.ip.server>${jvm.args.ip}</jvm.args.ip.server>
         <jvm.args.ip.client>${jvm.args.ip}</jvm.args.ip.client>
 
-        <!-- Security. -->
-        <jvm.args.securityManager></jvm.args.securityManager>
-        <jvm.args.securityPolicy></jvm.args.securityPolicy>
-        <jvm.args.securityManagerOther></jvm.args.securityManagerOther>
-        <jvm.args.security>${jvm.args.securityManager} ${jvm.args.securityPolicy} ${jvm.args.securityManagerOther}</jvm.args.security>
+        <!-- Server arguments. Cannot have a null server argument in ARQ, set a dummy system property -->
+        <jboss.args>-Dts.wildfly.version=${project.version}</jboss.args>
+        <!-- jboss.args is used in the arquillian.xml files, but wildfly-core DomainLifecycleUtil expects jboss.domain.server.args -->
+        <jboss.domain.server.args></jboss.domain.server.args>
 
         <!-- Additional JVM args, like those for EC2. -->
         <jvm.args.other>-server</jvm.args.other>
@@ -144,7 +141,7 @@
         <ds.jdbc.driver.target.path>${basedir}/target/jbossas/standalone/deployments</ds.jdbc.driver.target.path>
 
         <!-- Common surefire properties. -->
-        <surefire.memory.args>-Xmx512m -XX:MaxPermSize=256m</surefire.memory.args>
+        <surefire.memory.args>-Xmx512m</surefire.memory.args>
         <surefire.jpda.args></surefire.jpda.args>
         <as.debug.port>8787</as.debug.port>
         <surefire.system.args>${surefire.memory.args} ${surefire.jpda.args} -Djboss.dist=${jboss.dist}</surefire.system.args>
@@ -167,14 +164,6 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Arquillian bill of materials, used to configure Arquillian versions -->
-            <dependency>
-                <groupId>com.sun</groupId>
-                <artifactId>tools</artifactId>
-                <version>1.7</version>
-                <scope>system</scope>
-                <systemPath>${java.home}/../lib/tools.jar</systemPath> <!-- since jdk7 also on MAC this is proper path -->
-            </dependency>
             <dependency>
                 <groupId>org.syslog4j</groupId>
                 <artifactId>syslog4j</artifactId>
@@ -188,7 +177,7 @@
             <groupId>org.wildfly</groupId>
             <artifactId>wildfly-testsuite-shared</artifactId>
             <scope>test</scope>
-        </dependency>        
+        </dependency>
         <!-- Needed for @Resource(lookup=). -->
         <dependency>
             <groupId>org.jboss.spec.javax.annotation</groupId>
@@ -217,10 +206,6 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.sun</groupId>
-            <artifactId>tools</artifactId>
         </dependency>
     </dependencies>
 
@@ -377,6 +362,8 @@
                            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                            <jboss.dist>${jboss.dist}</jboss.dist>
                            <jboss.home>${basedir}/target/jbossas</jboss.home>
+                           <jboss.args>${jboss.args}</jboss.args>
+                           <jboss.domain.server.args>${jboss.domain.server.args}</jboss.domain.server.args>
                            <module.path>${jboss.dist}/modules${path.separator}${basedir}/target/modules</module.path>
                            <org.wildfly.test.kill-servers-before-test>${org.wildfly.test.kill-servers-before-test}</org.wildfly.test.kill-servers-before-test>
                        </systemPropertyVariables>
@@ -427,6 +414,22 @@
 
 
     <profiles>
+
+        <profile>
+            <id>tools-jar</id>
+            <activation>
+                <jdk>[1.7,1.9)</jdk>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>com.sun</groupId>
+                    <artifactId>tools</artifactId>
+                    <version>1.7</version>
+                    <scope>system</scope>
+                    <systemPath>${java.home}/../lib/tools.jar</systemPath>
+                </dependency>
+            </dependencies>
+        </profile>
 
         <!--
            Module profiles
@@ -635,24 +638,17 @@
             <properties><mcast3>${mcast3}</mcast3></properties>
         </profile>
 
-
-
-        <!-- Security policy.  ARQ-690, Wildfly-2823, Wildfly-2826. -->
+        <!-- Security manager. -->
         <profile>
-            <id>ts.security.policy</id>
-            <activation><property><name>security.policy</name></property></activation>
+            <id>ts.security.manager</id>
+            <activation>
+                <property>
+                    <name>security.manager</name>
+                </property>
+            </activation>
             <properties>
-                <jvm.args.securityManager>-Djava.security.manager</jvm.args.securityManager>
-                <jvm.args.securityPolicy>-Djava.security.policy=${security.policy}</jvm.args.securityPolicy>
-            </properties>
-        </profile>
-
-        <!-- Security Manager Other -->
-        <profile>
-            <id>ts.security.manager.other</id>
-            <activation><property><name>security.manager.other</name></property></activation>
-            <properties>
-                <jvm.args.securityManagerOther>${security.manager.other}</jvm.args.securityManagerOther>
+                <jboss.args>-secmgr</jboss.args>
+                <jboss.domain.server.args>-secmgr</jboss.domain.server.args>
             </properties>
         </profile>
 

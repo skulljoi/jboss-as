@@ -30,7 +30,11 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SOC
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SOCKET_BINDING_GROUP;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 
 import io.undertow.predicate.Predicates;
 import io.undertow.server.HttpHandler;
@@ -76,7 +80,28 @@ public class UndertowSubsystemTestCase extends AbstractSubsystemBaseTest {
 
     @Override
     protected String getSubsystemXml() throws IOException {
-        return readResource("undertow-2.0.xml");
+        return readResource("undertow-3.0.xml");
+    }
+
+    @Override
+    protected String getSubsystemXsdPath() throws Exception {
+        return "schema/wildfly-undertow_3_0.xsd";
+    }
+
+    @Override
+    protected String[] getSubsystemTemplatePaths() throws IOException {
+        return new String[] {
+                "/subsystem-templates/undertow.xml"
+        };
+    }
+
+    @Override
+    protected Properties getResolvedProperties() {
+        Properties properties = new Properties();
+        properties.put("jboss.home.dir", System.getProperty("java.io.tmpdir"));
+        properties.put("jboss.server.server.dir", System.getProperty("java.io.tmpdir"));
+        properties.put("server.data.dir", System.getProperty("java.io.tmpdir"));
+        return properties;
     }
 
     @Test
@@ -110,6 +135,8 @@ public class UndertowSubsystemTestCase extends AbstractSubsystemBaseTest {
         hostSC.setMode(ServiceController.Mode.ACTIVE);
         Host host = hostSC.getValue();
         Assert.assertEquals(1, host.getFilters().size());
+        Assert.assertEquals(3, host.getAllAliases().size());
+        Assert.assertEquals("default-alias", new ArrayList<>(host.getAllAliases()).get(1));
 
 
         final ServiceName locationServiceName = UndertowService.locationServiceName("some-server", "default-host", "/");
@@ -145,6 +172,16 @@ public class UndertowSubsystemTestCase extends AbstractSubsystemBaseTest {
         defaultServerSC.setMode(ServiceController.Mode.ACTIVE);
         Server defaultServer = defaultServerSC.getValue();
         Assert.assertNotNull("Default host should exist", defaultServer);
+
+
+        final ServiceName accessLogServiceName = UndertowService.accessLogServiceName("some-server", "default-host");
+        ServiceController<AccessLogService> accessLogSC = (ServiceController<AccessLogService>) mainServices.getContainer().getService(accessLogServiceName);
+        Assert.assertNotNull(accessLogSC);
+        accessLogSC.setMode(ServiceController.Mode.ACTIVE);
+        AccessLogService accessLogService = accessLogSC.getValue();
+        Assert.assertNotNull(accessLogService);
+        Assert.assertFalse(accessLogService.isRotate());
+
     }
 
     private void testCustomFilters(KernelServices mainServices) {

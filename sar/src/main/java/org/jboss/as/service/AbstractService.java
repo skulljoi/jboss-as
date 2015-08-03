@@ -26,10 +26,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
+import java.util.ListIterator;
+import java.util.concurrent.ExecutorService;
 
 import org.jboss.as.server.deployment.SetupAction;
 import org.jboss.msc.service.LifecycleContext;
 import org.jboss.msc.service.Service;
+import org.jboss.msc.value.InjectedValue;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
@@ -42,6 +45,8 @@ abstract class AbstractService implements Service<Object> {
     private final Object mBeanInstance;
     private final List<SetupAction> setupActions;
     private final ClassLoader mbeanContextClassLoader;
+    protected final InjectedValue<ExecutorService> executor = new InjectedValue<ExecutorService>();
+
 
     /**
      * @param mBeanInstance
@@ -73,11 +78,17 @@ abstract class AbstractService implements Service<Object> {
                     WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(old);
                 }
             } finally {
-                for (SetupAction action : setupActions) {
+                ListIterator<SetupAction> it = setupActions.listIterator(setupActions.size());
+                while (it.hasPrevious()) {
+                    SetupAction action = it.previous();
                     action.teardown(Collections.<String, Object>emptyMap());
                 }
             }
         }
+    }
+
+    public InjectedValue<ExecutorService> getExecutorInjector() {
+        return executor;
     }
 
 }

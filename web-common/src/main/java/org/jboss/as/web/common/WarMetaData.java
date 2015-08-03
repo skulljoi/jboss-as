@@ -21,6 +21,7 @@
  */
 package org.jboss.as.web.common;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -50,11 +51,6 @@ public class WarMetaData {
      * Main web.xml metadata.
      */
     private volatile WebMetaData webMetaData;
-
-    /**
-     * Shared web.xml metadata.
-     */
-    private volatile WebMetaData sharedWebMetaData;
 
     /**
      * Web fragments metadata.
@@ -95,6 +91,8 @@ public class WarMetaData {
      */
     private volatile JBossWebMetaData mergedJBossWebMetaData;
 
+    private File tempDir;
+
 
     private final Set<ServiceName> additionalDependencies = new HashSet<ServiceName>();
 
@@ -112,14 +110,6 @@ public class WarMetaData {
 
     public void setWebMetaData(WebMetaData webMetaData) {
         this.webMetaData = webMetaData;
-    }
-
-    public WebMetaData getSharedWebMetaData() {
-        return sharedWebMetaData;
-    }
-
-    public void setSharedWebMetaData(WebMetaData sharedWebMetaData) {
-        this.sharedWebMetaData = sharedWebMetaData;
     }
 
     public Map<String, WebFragmentMetaData> getWebFragmentsMetaData() {
@@ -192,5 +182,13 @@ public class WarMetaData {
 
     public Set<ServiceName> getAdditionalDependencies() {
         return Collections.unmodifiableSet(additionalDependencies);
+    }
+
+    public File getTempDir() {
+        return tempDir;
+    }
+
+    public void setTempDir(File tempDir) {
+        this.tempDir = tempDir;
     }
 }

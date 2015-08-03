@@ -22,21 +22,16 @@
 
 package org.jboss.as.connector.subsystems.datasources;
 
-import java.util.List;
-
 import org.jboss.as.connector.deployers.datasource.DefaultDataSourceBindingProcessor;
 import org.jboss.as.connector.deployers.datasource.DefaultDataSourceResourceReferenceProcessor;
 import org.jboss.as.connector.deployers.ds.DsDeploymentActivator;
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
-import org.jboss.as.controller.ServiceVerificationHandler;
 import org.jboss.as.server.AbstractDeploymentChainStep;
 import org.jboss.as.server.DeploymentProcessorTarget;
 import org.jboss.as.server.deployment.Phase;
 import org.jboss.dmr.ModelNode;
-import org.jboss.msc.service.ServiceController;
-
 
 /**
  * Handler for adding the datasource subsystem.
@@ -53,7 +48,7 @@ class DataSourcesSubsystemAdd extends AbstractBoottimeAddStepHandler {
     }
 
     @Override
-    protected void performBoottime(final OperationContext context, final ModelNode operation, final ModelNode model, final ServiceVerificationHandler verificationHandler, final List<ServiceController<?>> newControllers) throws OperationFailedException {
+    protected void performBoottime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
         final DsDeploymentActivator dsDeploymentActivator = new DsDeploymentActivator();
 
         context.addStep(new AbstractDeploymentChainStep() {
@@ -63,8 +58,5 @@ class DataSourcesSubsystemAdd extends AbstractBoottimeAddStepHandler {
                 processorTarget.addDeploymentProcessor(DataSourcesExtension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_DEFAULT_BINDINGS_DATASOURCE, new DefaultDataSourceBindingProcessor());
             }
         }, OperationContext.Stage.RUNTIME);
-
-
-        newControllers.addAll(dsDeploymentActivator.activateServices(context.getServiceTarget(), verificationHandler));
     }
 }

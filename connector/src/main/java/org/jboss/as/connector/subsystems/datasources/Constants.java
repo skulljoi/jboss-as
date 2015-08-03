@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.jboss.as.connector.logging.ConnectorLogger;
+import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.ObjectListAttributeDefinition;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.OperationFailedException;
@@ -233,7 +234,11 @@ public class Constants {
             .setAllowNull(true)
             .build();
 
-    static final String STATISTICS = "statistics";
+    static final SimpleAttributeDefinition PROFILE = SimpleAttributeDefinitionBuilder.create("profile", ModelType.STRING)
+                .setAllowNull(true)
+                .build();
+
+    public static final String STATISTICS = "statistics";
 
 
     static SimpleAttributeDefinition CONNECTION_URL = new SimpleAttributeDefinitionBuilder(CONNECTION_URL_NAME, ModelType.STRING, false)
@@ -321,6 +326,7 @@ public class Constants {
             .setAllowExpression(true)
             .setDefaultValue(new ModelNode(Defaults.ENABLED))
             .setAllowNull(true)
+            .setDeprecated(ModelVersion.create(3))
             .build();
 
     static SimpleAttributeDefinition CONNECTABLE = new SimpleAttributeDefinitionBuilder(CONNECTABLE_NAME, ModelType.BOOLEAN)
@@ -343,7 +349,7 @@ public class Constants {
             .setAllowExpression(true)
             .build();
 
-    static SimpleAttributeDefinition CONNECTION_PROPERTIES = new SimpleAttributeDefinitionBuilder(CONNECTION_PROPERTIES_NAME, ModelType.STRING, true)
+    static final PropertiesAttributeDefinition CONNECTION_PROPERTIES = new PropertiesAttributeDefinition.Builder(CONNECTION_PROPERTIES_NAME, true)
             .setXmlName(DataSource.Tag.CONNECTION_PROPERTY.getLocalName())
             .setAllowExpression(true)
             .build();
@@ -579,7 +585,7 @@ public class Constants {
             USERNAME, PASSWORD, SECURITY_DOMAIN,
             REAUTH_PLUGIN_CLASSNAME,
             org.jboss.as.connector.subsystems.common.pool.Constants.POOL_FLUSH_STRATEGY,
-            ALLOW_MULTIPLE_USERS, CONNECTION_LISTENER_CLASS, CONNECTION_PROPERTIES,
+            ALLOW_MULTIPLE_USERS, CONNECTION_LISTENER_CLASS,
             PREPARED_STATEMENTS_CACHE_SIZE,
             SHARE_PREPARED_STATEMENTS,
             TRACK_STATEMENTS,
@@ -605,6 +611,7 @@ public class Constants {
             EXCEPTION_SORTER_PROPERTIES,
             STALE_CONNECTION_CHECKER_PROPERTIES,
             VALID_CONNECTION_CHECKER_PROPERTIES, CONNECTION_LISTENER_PROPERTIES,
+            CONNECTION_PROPERTIES,
             org.jboss.as.connector.subsystems.common.pool.Constants.CAPACITY_INCREMENTER_PROPERTIES, org.jboss.as.connector.subsystems.common.pool.Constants.CAPACITY_DECREMENTER_PROPERTIES,
 
     };
@@ -687,7 +694,7 @@ public class Constants {
             org.jboss.as.connector.subsystems.common.pool.Constants.CAPACITY_INCREMENTER_PROPERTIES, org.jboss.as.connector.subsystems.common.pool.Constants.CAPACITY_DECREMENTER_PROPERTIES,
     };
 
-    static SimpleAttributeDefinition XADATASOURCE_PROPERTIES = new SimpleAttributeDefinitionBuilder(XADATASOURCEPROPERTIES_NAME, ModelType.STRING, false)
+    static final PropertiesAttributeDefinition XADATASOURCE_PROPERTIES = new PropertiesAttributeDefinition.Builder(XADATASOURCEPROPERTIES_NAME, false)
             .setXmlName(XaDataSource.Tag.XA_DATASOURCE_PROPERTY.getLocalName())
             .setAllowExpression(true)
             .build();
@@ -750,7 +757,8 @@ public class Constants {
             XA_DATASOURCE_CLASS,
             DRIVER_MAJOR_VERSION,
             DRIVER_MINOR_VERSION,
-            JDBC_COMPLIANT
+            JDBC_COMPLIANT,
+            PROFILE
     };
 
 
@@ -771,8 +779,8 @@ public class Constants {
             .setReplyParameters(DRIVER_MINOR_VERSION, DRIVER_MAJOR_VERSION, DEPLOYMENT_NAME, DRIVER_NAME, DRIVER_XA_DATASOURCE_CLASS_NAME, XA_DATASOURCE_CLASS, JDBC_COMPLIANT, MODULE_SLOT, DRIVER_CLASS_NAME, DRIVER_MODULE_NAME)
             .setAttributeResolver(DataSourcesExtension.getResourceDescriptionResolver("jdbc-driver"))
             .build();
-    static final SimpleOperationDefinition DATASOURCE_ENABLE = new SimpleOperationDefinitionBuilder(ENABLE, DataSourcesExtension.getResourceDescriptionResolver()).build();
-    static final SimpleOperationDefinition DATASOURCE_DISABLE = new SimpleOperationDefinitionBuilder(DISABLE, DataSourcesExtension.getResourceDescriptionResolver())
+    static final SimpleOperationDefinition DATASOURCE_ENABLE = new SimpleOperationDefinitionBuilder(ENABLE, DataSourcesExtension.getResourceDescriptionResolver()).setDeprecated(ModelVersion.create(3)).build();
+    static final SimpleOperationDefinition DATASOURCE_DISABLE = new SimpleOperationDefinitionBuilder(DISABLE, DataSourcesExtension.getResourceDescriptionResolver()).setDeprecated(ModelVersion.create(3))
             .build();
     static final SimpleOperationDefinition FLUSH_IDLE_CONNECTION = new SimpleOperationDefinitionBuilder("flush-idle-connection-in-pool", DataSourcesExtension.getResourceDescriptionResolver())
             .setRuntimeOnly().build();

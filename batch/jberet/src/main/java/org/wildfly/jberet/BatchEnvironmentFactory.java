@@ -23,15 +23,14 @@
 package org.wildfly.jberet;
 
 import java.util.Properties;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Future;
 import javax.transaction.TransactionManager;
 
 import org.jberet.repository.JobRepository;
 import org.jberet.spi.ArtifactFactory;
 import org.jberet.spi.BatchEnvironment;
+import org.jberet.spi.JobXmlResolver;
 import org.wildfly.jberet._private.WildFlyBatchLogger;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
@@ -54,17 +53,7 @@ public class BatchEnvironmentFactory {
         }
 
         @Override
-        public Future<?> submitTask(final Runnable runnable) {
-            throw WildFlyBatchLogger.LOGGER.invalidBatchEnvironment();
-        }
-
-        @Override
-        public <T> Future<T> submitTask(final Runnable runnable, final T t) {
-            throw WildFlyBatchLogger.LOGGER.invalidBatchEnvironment();
-        }
-
-        @Override
-        public <T> Future<T> submitTask(final Callable<T> callable) {
+        public void submitTask(final Runnable runnable) {
             throw WildFlyBatchLogger.LOGGER.invalidBatchEnvironment();
         }
 
@@ -75,6 +64,11 @@ public class BatchEnvironmentFactory {
 
         @Override
         public JobRepository getJobRepository() {
+            throw WildFlyBatchLogger.LOGGER.invalidBatchEnvironment();
+        }
+
+        @Override
+        public JobXmlResolver getJobXmlResolver() {
             throw WildFlyBatchLogger.LOGGER.invalidBatchEnvironment();
         }
 

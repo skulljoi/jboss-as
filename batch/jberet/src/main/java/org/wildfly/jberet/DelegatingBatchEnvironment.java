@@ -23,13 +23,12 @@
 package org.wildfly.jberet;
 
 import java.util.Properties;
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
 import javax.transaction.TransactionManager;
 
 import org.jberet.repository.JobRepository;
 import org.jberet.spi.ArtifactFactory;
 import org.jberet.spi.BatchEnvironment;
+import org.jberet.spi.JobXmlResolver;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -53,18 +52,8 @@ public class DelegatingBatchEnvironment implements BatchEnvironment {
     }
 
     @Override
-    public Future<?> submitTask(final Runnable task) {
-        return delegate.submitTask(task);
-    }
-
-    @Override
-    public <T> Future<T> submitTask(final Runnable task, final T result) {
-        return delegate.submitTask(task, result);
-    }
-
-    @Override
-    public <T> Future<T> submitTask(final Callable<T> task) {
-        return delegate.submitTask(task);
+    public void submitTask(final Runnable task) {
+        delegate.submitTask(task);
     }
 
     @Override
@@ -75,6 +64,11 @@ public class DelegatingBatchEnvironment implements BatchEnvironment {
     @Override
     public JobRepository getJobRepository() {
         return delegate.getJobRepository();
+    }
+
+    @Override
+    public JobXmlResolver getJobXmlResolver() {
+        return delegate.getJobXmlResolver();
     }
 
     /**

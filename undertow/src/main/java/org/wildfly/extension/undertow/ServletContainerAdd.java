@@ -26,12 +26,12 @@ import io.undertow.server.handlers.cache.DirectBufferCache;
 import io.undertow.servlet.api.ServletStackTraces;
 import io.undertow.servlet.api.SessionPersistenceManager;
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
-import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
+import org.jboss.dmr.Property;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceTarget;
@@ -40,7 +40,10 @@ import org.wildfly.extension.io.IOServices;
 import org.xnio.Pool;
 import org.xnio.XnioWorker;
 
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author <a href="mailto:tomaz.cerar@redhat.com">Tomaz Cerar</a> (c) 2013 Red Hat Inc.
@@ -49,26 +52,16 @@ final class ServletContainerAdd extends AbstractBoottimeAddStepHandler {
     static final ServletContainerAdd INSTANCE = new ServletContainerAdd();
 
     ServletContainerAdd() {
-    }
-
-    @Override
-    protected void populateModel(ModelNode operation, ModelNode model) throws OperationFailedException {
-        for (AttributeDefinition def : ServletContainerDefinition.INSTANCE.getAttributes()) {
-            def.validateAndSet(operation, model);
-        }
+        super(ServletContainerDefinition.ATTRIBUTES);
     }
 
     @Override
     protected void performBoottime(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
-        final PathAddress address = PathAddress.pathAddress(operation.get(OP_ADDR));
-        final String name = address.getLastElement().getValue();
-
-        installRuntimeServices(context, resource.getModel(), name);
-
+        installRuntimeServices(context, resource.getModel(), context.getCurrentAddressValue());
     }
 
     public void installRuntimeServices(OperationContext context, ModelNode model, String name) throws OperationFailedException {
-        final ModelNode fullModel = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+        final ModelNode fullModel = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS), 2);
 
         final SessionCookieConfig config = SessionCookieDefinition.INSTANCE.getConfig(context, fullModel.get(SessionCookieDefinition.INSTANCE.getPathElement().getKeyValuePair()));
         final boolean persistentSessions = PersistentSessionsDefinition.isEnabled(context, fullModel.get(PersistentSessionsDefinition.INSTANCE.getPathElement().getKeyValuePair()));
@@ -85,9 +78,28 @@ final class ServletContainerAdd extends AbstractBoottimeAddStepHandler {
         final boolean eagerFilterInit = ServletContainerDefinition.EAGER_FILTER_INIT.resolveModelAttribute(context, model).asBoolean();
         final boolean disableCachingForSecuredPages = ServletContainerDefinition.DISABLE_CACHING_FOR_SECURED_PAGES.resolveModelAttribute(context, model).asBoolean();
 
+        Boolean directoryListingEnabled = null;
+        if(model.hasDefined(Constants.DIRECTORY_LISTING)) {
+            directoryListingEnabled = ServletContainerDefinition.DIRECTORY_LISTING.resolveModelAttribute(context, model).asBoolean();
+        }
+
         final int sessionTimeout = ServletContainerDefinition.DEFAULT_SESSION_TIMEOUT.resolveModelAttribute(context, model).asInt();
 
         WebsocketsDefinition.WebSocketInfo info = WebsocketsDefinition.INSTANCE.getConfig(context, model);
+
+        final Map<String, String> mimeMappings = new HashMap<>();
+        if (fullModel.hasDefined(Constants.MIME_MAPPING)) {
+            for (final Property mapping : fullModel.get(Constants.MIME_MAPPING).asPropertyList()) {
+                mimeMappings.put(mapping.getName(), MimeMappingDefinition.VALUE.resolveModelAttribute(context, mapping.getValue()).asString());
+            }
+        }
+
+        List<String> welcomeFiles = new ArrayList<>();
+        if (fullModel.hasDefined(Constants.WELCOME_FILE)) {
+            for (final Property welcome : fullModel.get(Constants.WELCOME_FILE).asPropertyList()) {
+                welcomeFiles.add(welcome.getName());
+            }
+        }
 
         final ServletContainerService container = new ServletContainerService(allowNonStandardWrappers,
                 ServletStackTraces.valueOf(stackTracesString.toUpperCase().replace('-', '_')),
@@ -98,7 +110,9 @@ final class ServletContainerAdd extends AbstractBoottimeAddStepHandler {
                 ignoreFlush,
                 eagerFilterInit,
                 sessionTimeout,
-                disableCachingForSecuredPages, info != null, info != null && info.isDispatchToWorker());
+                disableCachingForSecuredPages, info != null, info != null && info.isDispatchToWorker(),
+                mimeMappings,
+                welcomeFiles, directoryListingEnabled);
         final ServiceTarget target = context.getServiceTarget();
         final ServiceBuilder<ServletContainerService> builder = target.addService(UndertowService.SERVLET_CONTAINER.append(name), container);
         if(bufferCache != null) {
@@ -109,7 +123,7 @@ final class ServletContainerAdd extends AbstractBoottimeAddStepHandler {
         }
         if(info != null) {
             builder.addDependency(IOServices.WORKER.append(info.getWorker()), XnioWorker.class, container.getWebsocketsWorker());
-            builder.addDependency(IOServices.BUFFER_POOL.append(info.getBufferPool()), Pool.class, (InjectedValue)container.getWebsocketsBufferPool());
+            builder.addDependency(IOServices.BUFFER_POOL.append(info.getBufferPool()), Pool.class, (InjectedValue) container.getWebsocketsBufferPool());
         }
 
         builder.setInitialMode(ServiceController.Mode.ON_DEMAND)

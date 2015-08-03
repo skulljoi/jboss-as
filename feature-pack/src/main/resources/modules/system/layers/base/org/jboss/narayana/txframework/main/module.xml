@@ -26,7 +26,6 @@
 
     <resources>
         <artifact name="${org.jboss.narayana.txframework:txframework}"/>
-        <artifact name="${org.jboss.narayana.rts:restat-util}"/>
     </resources>
 
     <dependencies>

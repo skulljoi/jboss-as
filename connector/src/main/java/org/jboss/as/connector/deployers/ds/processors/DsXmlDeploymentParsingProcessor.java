@@ -41,6 +41,7 @@ import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.jca.common.api.metadata.ds.DataSource;
 import org.jboss.jca.common.api.metadata.ds.DataSources;
+import org.jboss.metadata.property.PropertyReplacer;
 import org.jboss.metadata.property.PropertyResolver;
 import org.jboss.vfs.VFSUtils;
 import org.jboss.vfs.VirtualFile;
@@ -76,18 +77,23 @@ public class DsXmlDeploymentParsingProcessor implements DeploymentUnitProcessor 
         final DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
         boolean resolveProperties = Util.shouldResolveJBoss(deploymentUnit);
         final PropertyResolver propertyResolver = deploymentUnit.getAttachment(org.jboss.as.ee.metadata.property.Attachments.FINAL_PROPERTY_RESOLVER);
+        final PropertyReplacer propertyReplacer = deploymentUnit.getAttachment(org.jboss.as.ee.metadata.property.Attachments.FINAL_PROPERTY_REPLACER);
 
         final Set<VirtualFile> files = dataSources(deploymentUnit);
-
+        boolean loggedDeprication = false;
         for (VirtualFile f : files) {
             InputStream xmlStream = null;
             try {
                 xmlStream = new FileInputStream(f.getPhysicalFile());
-                DsXmlParser parser = new DsXmlParser(propertyResolver);
+                DsXmlParser parser = new DsXmlParser(propertyResolver, propertyReplacer);
                 parser.setSystemPropertiesResolved(resolveProperties);
                 DataSources dataSources = parser.parse(xmlStream);
 
                 if (dataSources != null) {
+                    if (!loggedDeprication) {
+                        loggedDeprication = true;
+                        ConnectorLogger.ROOT_LOGGER.deprecated();
+                    }
                     for (DataSource ds : dataSources.getDataSource()) {
                         if (ds.getDriver() == null) {
                             throw ConnectorLogger.ROOT_LOGGER.FailedDeployDriverNotSpecified(ds.getJndiName());

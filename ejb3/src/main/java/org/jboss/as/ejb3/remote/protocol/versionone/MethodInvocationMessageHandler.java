@@ -22,18 +22,6 @@
 
 package org.jboss.as.ejb3.remote.protocol.versionone;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectStreamException;
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-
 import org.jboss.as.ee.component.Component;
 import org.jboss.as.ee.component.ComponentView;
 import org.jboss.as.ee.component.interceptors.InvocationType;
@@ -62,11 +50,23 @@ import org.jboss.remoting3.MessageOutputStream;
 import org.wildfly.security.manager.WildFlySecurityManager;
 import org.xnio.IoUtils;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectStreamException;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+
 
 /**
  * @author Jaikiran Pai
  */
-class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
+public class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
 
     private static final char METHOD_PARAM_TYPE_SEPARATOR = ',';
 
@@ -77,7 +77,7 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
     private final MarshallerFactory marshallerFactory;
     private final RemoteAsyncInvocationCancelStatusService remoteAsyncInvocationCancelStatus;
 
-    MethodInvocationMessageHandler(final DeploymentRepository deploymentRepository, final org.jboss.marshalling.MarshallerFactory marshallerFactory, final ExecutorService executorService,
+    public MethodInvocationMessageHandler(final DeploymentRepository deploymentRepository, final org.jboss.marshalling.MarshallerFactory marshallerFactory, final ExecutorService executorService,
                                    final RemoteAsyncInvocationCancelStatusService asyncInvocationCancelStatus) {
         super(deploymentRepository);
         this.marshallerFactory = marshallerFactory;
@@ -191,7 +191,7 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
                         } catch (Throwable t) {
                             // catch Throwable, so that we don't skip invoking the method, just because we
                             // failed to send a notification to the client that the method is an async method
-                            EjbLogger.ROOT_LOGGER.failedToSendAsyncMethodIndicatorToClient(t, invokedMethod);
+                            EjbLogger.REMOTE_LOGGER.failedToSendAsyncMethodIndicatorToClient(t, invokedMethod);
                         }
                     }
 
@@ -205,7 +205,7 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
                             // if the EJB is shutting down when the invocation was done, then it's as good as the EJB not being available. The client has to know about this as
                             // a "no such EJB" failure so that it can retry the invocation on a different node if possible.
                             if (throwable instanceof EJBComponentUnavailableException) {
-                                EjbLogger.EJB3_INVOCATION_LOGGER.debug("Cannot handle method invocation: " + invokedMethod + " on bean: " + beanName + " due to EJB component unavailability exception. Returning a no such EJB available message back to client");
+                                EjbLogger.EJB3_INVOCATION_LOGGER.debugf("Cannot handle method invocation: %s on bean: %s due to EJB component unavailability exception. Returning a no such EJB available message back to client", invokedMethod, beanName);
                                 MethodInvocationMessageHandler.this.writeNoSuchEJBFailureMessage(channelAssociation, invocationId, appName, moduleName, distinctName, beanName, viewClassName);
                             } else {
                                 // write out the failure
@@ -214,9 +214,9 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
                         } catch (Throwable ioe) {
                             // we couldn't write out a method invocation failure message. So let's at least log the
                             // actual method invocation exception, for debugging/reference
-                            EjbLogger.ROOT_LOGGER.errorInvokingMethod(throwable, invokedMethod, beanName, appName, moduleName, distinctName);
+                            EjbLogger.REMOTE_LOGGER.errorInvokingMethod(throwable, invokedMethod, beanName, appName, moduleName, distinctName);
                             // now log why we couldn't send back the method invocation failure message
-                            EjbLogger.ROOT_LOGGER.couldNotWriteMethodInvocation(ioe, invokedMethod, beanName, appName, moduleName, distinctName);
+                            EjbLogger.REMOTE_LOGGER.couldNotWriteMethodInvocation(ioe, invokedMethod, beanName, appName, moduleName, distinctName);
                             // close the channel unless this is a NotSerializableException
                             //as this does not represent a problem with the channel there is no
                             //need to close it (see AS7-3402)
@@ -242,11 +242,11 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
                         if (weakAffinity != null) {
                             attachments.put(Affinity.WEAK_AFFINITY_CONTEXT_KEY, weakAffinity);
                         }
-                        writeMethodInvocationResponse(channelAssociation, invocationId, result, attachments);
+                        writeMethodInvocationResponse(channelAssociation, invocationId, result, attachments, invokedMethod, componentView);
                     } catch (Throwable ioe) {
                         boolean isAsyncVoid = componentView.isAsynchronous(invokedMethod) && invokedMethod.getReturnType().equals(Void.TYPE);
                         if (!isAsyncVoid)
-                            EjbLogger.ROOT_LOGGER.couldNotWriteMethodInvocation(ioe, invokedMethod, beanName, appName, moduleName, distinctName);
+                            EjbLogger.REMOTE_LOGGER.couldNotWriteMethodInvocation(ioe, invokedMethod, beanName, appName, moduleName, distinctName);
                         // close the channel unless this is a NotSerializableException
                         //as this does not represent a problem with the channel there is no
                         //need to close it (see AS7-3402)
@@ -290,8 +290,8 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
                 // these are private to JBoss EJB implementation and not meant to be visible to the
                 // application, so add these attachments to the privateData of the InterceptorContext
                 if (EJBClientInvocationContext.PRIVATE_ATTACHMENTS_KEY.equals(key)) {
-                    final Map<Object, Object> privateAttachments = (Map<Object, Object>) value;
-                    for (final Map.Entry<Object, Object> privateAttachment : privateAttachments.entrySet()) {
+                    final Map<?, ?> privateAttachments = (Map<?, ?>) value;
+                    for (final Map.Entry<?, ?> privateAttachment : privateAttachments.entrySet()) {
                         interceptorContext.putPrivateData(privateAttachment.getKey(), privateAttachment.getValue());
                     }
                 } else {
@@ -311,7 +311,7 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
         if (componentView.isAsynchronous(method)) {
             final Component component = componentView.getComponent();
             if (!(component instanceof SessionBeanComponent)) {
-                EjbLogger.ROOT_LOGGER.asyncMethodSupportedOnlyForSessionBeans(component.getComponentClass(), method);
+                EjbLogger.REMOTE_LOGGER.asyncMethodSupportedOnlyForSessionBeans(component.getComponentClass(), method);
                 // just invoke normally
                 return componentView.invoke(interceptorContext);
             }
@@ -321,7 +321,7 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
             this.remoteAsyncInvocationCancelStatus.registerAsyncInvocation(invocationId, asyncInvocationCancellationFlag);
             try {
                 final Object result = componentView.invoke(interceptorContext);
-                return result == null ? null : ((Future) result).get();
+                return result == null ? null : ((Future<?>) result).get();
             } finally {
                 // now that the async invocation is done, we no longer need to keep track of the
                 // cancellation flag for this invocation
@@ -355,7 +355,7 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
         return null;
     }
 
-    private void writeMethodInvocationResponse(final ChannelAssociation channelAssociation, final short invocationId, final Object result, final Map<String, Object> attachments) throws IOException {
+    private void writeMethodInvocationResponse(final ChannelAssociation channelAssociation, final short invocationId, final Object result, final Map<String, Object> attachments, Method invokedMethod, ComponentView componentView) throws IOException {
         final DataOutputStream outputStream;
         final MessageOutputStream messageOutputStream;
         try {
@@ -363,7 +363,7 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
         } catch (Throwable e) {
             throw EjbLogger.ROOT_LOGGER.failedToOpenMessageOutputStream(e);
         }
-        outputStream = new DataOutputStream(messageOutputStream);
+        outputStream = wrapMessageOutputStream(messageOutputStream, invokedMethod, componentView);
         try {
             // write invocation response header
             outputStream.write(HEADER_METHOD_INVOCATION_RESPONSE);
@@ -377,9 +377,14 @@ class MethodInvocationMessageHandler extends EJBIdentifierBasedMessageHandler {
             // finish marshalling
             marshaller.finish();
         } finally {
+            IoUtils.safeClose(outputStream);
+            IoUtils.safeClose(messageOutputStream);
             channelAssociation.releaseChannelMessageOutputStream(messageOutputStream);
-            outputStream.close();
         }
+    }
+
+    protected DataOutputStream wrapMessageOutputStream(MessageOutputStream messageOutputStream, Method invokedMethod, ComponentView componentView) throws IOException {
+        return new DataOutputStream(messageOutputStream);
     }
 
 

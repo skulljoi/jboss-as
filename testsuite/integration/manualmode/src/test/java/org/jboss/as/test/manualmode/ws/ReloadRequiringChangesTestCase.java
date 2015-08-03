@@ -24,8 +24,6 @@ package org.jboss.as.test.manualmode.ws;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADDRESS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OPERATION_REQUIRES_RELOAD;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION;
@@ -42,7 +40,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.concurrent.ExecutionException;
 
 import org.jboss.arquillian.container.test.api.ContainerController;
 import org.jboss.arquillian.container.test.api.Deployer;
@@ -54,7 +51,7 @@ import org.jboss.arquillian.test.api.ArquillianResource;
 import org.jboss.as.arquillian.container.ManagementClient;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.OperationBuilder;
-import org.jboss.as.controller.client.helpers.ClientConstants;
+import org.jboss.as.test.shared.ServerReload;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
@@ -64,7 +61,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.xnio.IoUtils;
 
 /**
  * Some tests on changes to the model requiring reload
@@ -105,16 +101,16 @@ public class ReloadRequiringChangesTestCase {
         Assert.assertTrue(containerController.isStarted(DEFAULT_JBOSSAS));
         ManagementClient managementClient = new ManagementClient(TestSuiteEnvironment.getModelControllerClient(),
                 TestSuiteEnvironment.getServerAddress(), TestSuiteEnvironment.getServerPort(), "http-remoting");
-        
+
         ModelControllerClient client = managementClient.getControllerClient();
         String initialWsdlHost = null;
         try {
             initialWsdlHost = getWsdlHost(client);
-            
+
             //change wsdl-host to "foo-host" and reload
             final String hostname = "foo-host";
 	        setWsdlHost(client, hostname);
-	        reloadServer(client, 100000);
+            ServerReload.executeReloadAndWaitForCompletion(client);
 
             //change wsdl-host to "bar-host" and verify deployment still uses "foo-host"
 	        setWsdlHost(client, "bar-host");
@@ -130,23 +126,23 @@ public class ReloadRequiringChangesTestCase {
             }
         }
     }
-    
+
     @Test
     @OperateOnDeployment(DEPLOYMENT)
     public void testWSDLHostUndefineRequiresReloadAndDoesNotAffectRuntime() throws Exception {
         Assert.assertTrue(containerController.isStarted(DEFAULT_JBOSSAS));
         ManagementClient managementClient = new ManagementClient(TestSuiteEnvironment.getModelControllerClient(),
                 TestSuiteEnvironment.getServerAddress(), TestSuiteEnvironment.getServerPort(), "http-remoting");
-        
+
         ModelControllerClient client = managementClient.getControllerClient();
         String initialWsdlHost = null;
         try {
             initialWsdlHost = getWsdlHost(client);
-            
+
             //change wsdl-host to "my-host" and reload
             final String hostname = "my-host";
 	        setWsdlHost(client, hostname);
-	        reloadServer(client, 100000);
+	        ServerReload.executeReloadAndWaitForCompletion(client);
 
             //undefine wsdl-host and verify deployment still uses "foo-host"
 	        setWsdlHost(client, null);
@@ -199,7 +195,7 @@ public class ReloadRequiringChangesTestCase {
     	}
     	applyUpdate(client, op);
     }
-    
+
     private static ModelNode createOpNode(String address, String operation) {
         ModelNode op = new ModelNode();
         // set address
@@ -214,7 +210,7 @@ public class ReloadRequiringChangesTestCase {
         op.get("operation").set(operation);
         return op;
     }
-    
+
 	private static ModelNode applyUpdate(final ModelControllerClient client, final ModelNode update) throws Exception {
 		final ModelNode result = client.execute(new OperationBuilder(update).build());
 		if (result.hasDefined(OUTCOME) && SUCCESS.equals(result.get(OUTCOME).asString())) {
@@ -230,53 +226,6 @@ public class ReloadRequiringChangesTestCase {
         }
 	}
 
-    private void reloadServer(ModelControllerClient client, int timeout) throws Exception {
-        executeReload(client);
-        waitForLiveServerToReload(timeout);
-    }
-
-    private void executeReload(ModelControllerClient client) throws IOException {
-        ModelNode operation = new ModelNode();
-        operation.get(OP_ADDR).setEmptyList();
-        operation.get(OP).set("reload");
-        try {
-            ModelNode result = client.execute(operation);
-            Assert.assertEquals("success", result.get(ClientConstants.OUTCOME).asString());
-        } catch(IOException e) {
-            final Throwable cause = e.getCause();
-            if (cause instanceof ExecutionException) {
-                // ignore, this might happen if the channel gets closed before we got the response
-            } else {
-                throw e;
-            }
-        }
-    }
-
-    private void waitForLiveServerToReload(int timeout) throws Exception {
-        long start = System.currentTimeMillis();
-        ModelNode operation = new ModelNode();
-        operation.get(OP_ADDR).setEmptyList();
-        operation.get(OP).set(READ_ATTRIBUTE_OPERATION);
-        operation.get(NAME).set("server-state");
-        while (System.currentTimeMillis() - start < timeout) {
-            ModelControllerClient liveClient = ModelControllerClient.Factory.create(
-                    TestSuiteEnvironment.getServerAddress(), TestSuiteEnvironment.getServerPort());
-            try {
-                ModelNode result = liveClient.execute(operation);
-                if ("running".equals(result.get(RESULT).asString())) {
-                    return;
-                }
-            } catch (IOException e) {
-            } finally {
-                IoUtils.safeClose(liveClient);
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-            }
-        }
-        fail("Live Server did not reload in the imparted time.");
-    }
 
     private void checkWsdl(URL wsdlURL, String host) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) wsdlURL.openConnection();
@@ -284,7 +233,7 @@ public class ReloadRequiringChangesTestCase {
             connection.connect();
             Assert.assertEquals(200, connection.getResponseCode());
             connection.getInputStream();
-            
+
 			BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
 			String line;
 			while ((line = in.readLine()) != null) {

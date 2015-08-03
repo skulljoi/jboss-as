@@ -24,13 +24,12 @@ package org.jboss.as.webservices.dmr;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.webservices.dmr.PackageUtils.getEndpointConfigServiceName;
 
-import java.util.List;
-
 import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathAddress;
-import org.jboss.as.controller.ServiceVerificationHandler;
+import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.webservices.logging.WSLogger;
 import org.jboss.as.webservices.service.ConfigService;
 import org.jboss.as.webservices.service.PropertyService;
 import org.jboss.as.webservices.util.ASHelper;
@@ -62,15 +61,15 @@ final class EndpointConfigAdd extends AbstractAddStepHandler {
     }
 
     @Override
-    protected void rollbackRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final List<ServiceController<?>> controllers) {
-        super.rollbackRuntime(context, operation, model, controllers);
+    protected void rollbackRuntime(OperationContext context, ModelNode operation, Resource resource) {
+        super.rollbackRuntime(context, operation, resource);
         if (!context.isBooting()) {
-           context.revertReloadRequired();
+            context.revertReloadRequired();
         }
     }
 
     @Override
-    protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final ServiceVerificationHandler verificationHandler, final List<ServiceController<?>> newControllers) throws OperationFailedException {
+    protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
         //modify the runtime if we're booting, otherwise set reload required and leave the runtime unchanged
         if (context.isBooting()) {
            final PathAddress address = PathAddress.pathAddress(operation.require(OP_ADDR));
@@ -78,6 +77,9 @@ final class EndpointConfigAdd extends AbstractAddStepHandler {
 
            //get the server config object from the ServerConfigService (service installed but not started yet, but the object is fine for our needs here)
            final ServerConfig serverConfig = ASHelper.getMSCService(WSServices.CONFIG_SERVICE, ServerConfig.class, context);
+           if (serverConfig == null) {
+               throw WSLogger.ROOT_LOGGER.serviceNotAvailable(WSServices.CONFIG_SERVICE.getCanonicalName());
+           }
            final ServiceName serviceName = getEndpointConfigServiceName(name);
            final ConfigService endpointConfigService = new ConfigService(serverConfig, name, false);
 
@@ -92,10 +94,7 @@ final class EndpointConfigAdd extends AbstractAddStepHandler {
            for (ServiceName sn : PackageUtils.getServiceNameDependencies(context, serviceName, address, Constants.POST_HANDLER_CHAIN)) {
                serviceBuilder.addDependency(sn, UnifiedHandlerChainMetaData.class, endpointConfigService.getPostHandlerChainsInjector()); //get a new injector instance each time
            }
-           ServiceController<?> controller = serviceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
-           if (newControllers != null) {
-               newControllers.add(controller);
-           }
+           serviceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
         } else {
            context.reloadRequired();
         }

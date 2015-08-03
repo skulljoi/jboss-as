@@ -33,6 +33,7 @@ import static org.jboss.as.connector.subsystems.resourceadapters.Constants.CONFI
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.CONNECTIONDEFINITIONS_NAME;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.MODULE;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.RESOURCEADAPTER_NAME;
+import static org.jboss.as.connector.subsystems.resourceadapters.Constants.STATISTICS_ENABLED;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.TRANSACTION_SUPPORT;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.WM_SECURITY;
 import static org.jboss.as.connector.subsystems.resourceadapters.Constants.WM_SECURITY_DEFAULT_GROUP;
@@ -82,9 +83,6 @@ public class ResourceAdapterParser extends CommonIronJacamarParser {
 
 
     public void parse(final XMLExtendedStreamReader reader, final List<ModelNode> list, ModelNode parentAddress) throws Exception {
-
-        Activations adapters = null;
-
 
         //iterate over tags
         int iterate;
@@ -180,6 +178,9 @@ public class ResourceAdapterParser extends CommonIronJacamarParser {
                             id = value;
                             break;
                         }
+                        case STATISTICS_ENABLED:
+                            STATISTICS_ENABLED.parseAndSetParameter(value, operation, reader);
+                            break;
                         default:
                             break;
                     }
@@ -560,7 +561,11 @@ public class ResourceAdapterParser extends CommonIronJacamarParser {
         /**
          * id attribute
          */
-        ID("id"),;
+        ID("id"),
+        /**
+         * statistics-enabled attribute
+         */
+        STATISTICS_ENABLED("statistics-enabled"),;
 
         private String name;
 

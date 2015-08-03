@@ -2,7 +2,7 @@
 
 <!--
   ~ JBoss, Home of Professional Open Source.
-  ~ Copyright 2012, Red Hat, Inc., and individual contributors
+  ~ Copyright 2014, Red Hat, Inc., and individual contributors
   ~ as indicated by the @author tags. See the copyright.txt file in the
   ~ distribution for a full listing of individual contributors.
   ~
@@ -60,6 +60,7 @@
             <xs:element name="default-missing-method-permissions-deny-access" type="default-missing-method-permissions-deny-accessType" minOccurs="0" maxOccurs="1" />
             <xs:element name="disable-default-ejb-permissions" type="disable-default-ejb-permissionsType" minOccurs="0" maxOccurs="1" />
             <xs:element name="statistics" type="statisticsType" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="log-system-exceptions" type="log-system-exceptionsType" minOccurs="0" maxOccurs="1"/>
         </xs:all>
     </xs:complexType>
 
@@ -85,9 +86,33 @@
         <xs:all>
             <xs:element name="channel-creation-options" type="channel-creation-optionsType" minOccurs="0"
                         maxOccurs="1"/>
+            <xs:element name="profiles" type="profilesType" minOccurs="0" maxOccurs="1"/>
         </xs:all>
         <xs:attribute name="connector-ref" type="xs:string" use="required"/>
         <xs:attribute name="thread-pool-name" type="xs:token" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="profilesType">
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+            <xs:element name="profile" type="profileType"/>
+        </xs:choice>
+    </xs:complexType>
+
+    <xs:complexType name="profileType">
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+            <xs:element name="remoting-ejb-receiver" type="remoting-ejb-receiverType"/>
+        </xs:choice>
+        <xs:attribute name="name" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="remoting-ejb-receiverType">
+        <xs:all>
+            <xs:element name="channel-creation-options" type="channel-creation-optionsType" minOccurs="0"
+                        maxOccurs="1"/>
+        </xs:all>
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="outbound-connection-ref" type="xs:string" use="required"/>
+        <xs:attribute name="connect-timeout" type="xs:long" use="optional"/>
     </xs:complexType>
 
     <xs:complexType name="asyncType">
@@ -404,6 +429,17 @@
                    </xs:documentation>
                </xs:annotation>
         <xs:attribute name="value" type="xs:boolean"/>
+    </xs:complexType>
+
+    <xs:complexType name="log-system-exceptionsType">
+        <xs:annotation>
+            <xs:documentation>
+                <![CDATA[
+                       If this is enabled then system exceptions will be logged by the EJB subsystem.
+                   ]]>
+            </xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="value" type="xs:string"/>
     </xs:complexType>
 
 

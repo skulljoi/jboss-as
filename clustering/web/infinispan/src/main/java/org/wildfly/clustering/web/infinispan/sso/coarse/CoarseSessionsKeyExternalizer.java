@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-import org.jboss.as.clustering.infinispan.io.AbstractSimpleExternalizer;
+import org.wildfly.clustering.infinispan.spi.io.AbstractSimpleExternalizer;
 
 /**
  * Externalizer for {@link CoarseSessionsKey}.
@@ -45,7 +45,7 @@ public class CoarseSessionsKeyExternalizer extends AbstractSimpleExternalizer<Co
     }
 
     @Override
-    public CoarseSessionsKey readObject(ObjectInput input) throws IOException, ClassNotFoundException {
+    public CoarseSessionsKey readObject(ObjectInput input) throws IOException {
         return new CoarseSessionsKey(input.readUTF());
     }
 }

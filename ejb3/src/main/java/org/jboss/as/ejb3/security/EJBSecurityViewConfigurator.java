@@ -42,6 +42,7 @@ import org.jboss.as.ejb3.component.MethodIntf;
 import org.jboss.as.ejb3.component.session.SessionBeanComponentDescription;
 import org.jboss.as.ejb3.deployment.ApplicableMethodInformation;
 import org.jboss.as.ejb3.security.service.EJBViewMethodSecurityAttributesService;
+import org.jboss.as.security.deployment.SecurityAttachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.reflect.ClassReflectionIndexUtil;
@@ -64,14 +65,23 @@ public class EJBSecurityViewConfigurator implements ViewConfigurator {
         if (componentConfiguration.getComponentDescription() instanceof EJBComponentDescription == false) {
             throw EjbLogger.ROOT_LOGGER.invalidEjbComponent(componentConfiguration.getComponentName(), componentConfiguration.getComponentClass());
         }
+
+        if(!context.getDeploymentUnit().hasAttachment(SecurityAttachments.SECURITY_ENABLED)) {
+            //the security subsystem is not present, we don't apply any security settings
+            return;
+        }
         final DeploymentReflectionIndex deploymentReflectionIndex = context.getDeploymentUnit().getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
         final EJBComponentDescription ejbComponentDescription = (EJBComponentDescription) componentConfiguration.getComponentDescription();
         // The getSecurityDomain() will return a null value if neither an explicit security domain is configured
         // for the bean nor there's any default security domain that's configured at EJB3 subsystem level.
         // In such cases, we do *not* apply any security interceptors
         if (ejbComponentDescription.getSecurityDomain() == null || ejbComponentDescription.getSecurityDomain().isEmpty()) {
-            ROOT_LOGGER.debug("Security is *not* enabled on EJB: " + ejbComponentDescription.getEJBName() +
-                    ", since no explicit security domain is configured for the bean, nor is there any default security domain configured in the EJB3 subsystem");
+            if (ROOT_LOGGER.isDebugEnabled()) {
+                ROOT_LOGGER
+                        .debug("Security is *not* enabled on EJB: "
+                                + ejbComponentDescription.getEJBName()
+                                + ", since no explicit security domain is configured for the bean, nor is there any default security domain configured in the EJB3 subsystem");
+            }
             return;
         }
 
@@ -90,7 +100,7 @@ public class EJBSecurityViewConfigurator implements ViewConfigurator {
             viewMethodSecurityAttributesServiceBuilder = null;
             viewMethodSecurityAttributesServiceName = null;
         } else {
-            viewMethodSecurityAttributesServiceBuilder = new EJBViewMethodSecurityAttributesService.Builder(viewClassName);
+            viewMethodSecurityAttributesServiceBuilder = new EJBViewMethodSecurityAttributesService.Builder();
             viewMethodSecurityAttributesServiceName =  EJBViewMethodSecurityAttributesService.getServiceName(ejbComponentDescription.getApplicationName(), ejbComponentDescription.getModuleName(), ejbComponentDescription.getEJBName(), viewClassName);
         }
         // setup the method specific security interceptor(s)
@@ -148,7 +158,7 @@ public class EJBSecurityViewConfigurator implements ViewConfigurator {
             }
         } else {
             // if security is not applicable for the EJB, then do *not* add the security related interceptors
-            ROOT_LOGGER.debug("Security is *not* enabled on EJB: " + ejbComponentDescription.getEJBName() + ", no security interceptors will apply");
+            ROOT_LOGGER.debugf("Security is *not* enabled on EJB: %s, no security interceptors will apply",  ejbComponentDescription.getEJBName());
 
             if (viewMethodSecurityAttributesServiceBuilder != null) {
                 // we install the service anyway since other components can depend on it
@@ -202,7 +212,9 @@ public class EJBSecurityViewConfigurator implements ViewConfigurator {
                 ejbMethodSecurityMetaData = EJBMethodSecurityAttribute.rolesAllowed(rolesAllowed);
             }
             // build the EJBViewMethodSecurityAttributesService to expose these security attributes to other components like WS (@see https://issues.jboss.org/browse/WFLY-308)
-            viewMethodSecurityAttributesServiceBuilder.addMethodSecurityMetadata(viewMethod, ejbMethodSecurityMetaData);
+            if (viewMethodSecurityAttributesServiceBuilder != null) {
+                viewMethodSecurityAttributesServiceBuilder.addMethodSecurityMetadata(viewMethod, ejbMethodSecurityMetaData);
+            }
             // add the interceptor
             final Interceptor authorizationInterceptor = new AuthorizationInterceptor(ejbMethodSecurityMetaData, viewClassName, viewMethod, contextID);
             viewConfiguration.addViewInterceptor(viewMethod, new ImmediateInterceptorFactory(authorizationInterceptor), InterceptorOrder.View.EJB_SECURITY_AUTHORIZATION_INTERCEPTOR);

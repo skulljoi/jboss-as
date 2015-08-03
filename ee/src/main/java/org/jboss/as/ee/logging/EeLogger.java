@@ -22,6 +22,7 @@
 
 package org.jboss.as.ee.logging;
 
+import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.WARN;
 
 import java.io.IOException;
@@ -33,6 +34,7 @@ import java.util.Set;
 import javax.xml.namespace.QName;
 import javax.xml.stream.Location;
 import javax.xml.stream.XMLStreamException;
+
 import org.jboss.as.ee.component.BindingConfiguration;
 import org.jboss.as.ee.component.ComponentConfiguration;
 import org.jboss.as.ee.component.ComponentInstance;
@@ -44,9 +46,9 @@ import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.BasicLogger;
+import org.jboss.logging.Logger;
 import org.jboss.logging.annotations.Cause;
 import org.jboss.logging.annotations.LogMessage;
-import org.jboss.logging.Logger;
 import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.logging.annotations.Param;
@@ -64,11 +66,6 @@ public interface EeLogger extends BasicLogger {
      * A logger with a category of the package name.
      */
     EeLogger ROOT_LOGGER = Logger.getMessageLogger(EeLogger.class, "org.jboss.as.ee");
-
-    /**
-     * A logger with a category of {@code org.jboss.as.server.deployment}.
-     */
-    EeLogger SERVER_DEPLOYMENT_LOGGER = Logger.getMessageLogger(EeLogger.class, "org.jboss.as.server.deployment");
 
     /**
      * Logs a warning message indicating the transaction datasource, represented by the {@code className} parameter,
@@ -1062,8 +1059,8 @@ public interface EeLogger extends BasicLogger {
     @Message(id = 106, value = "EE Concurrent Context %s service not installed.")
     IOException concurrentContextServiceNotInstalled(ServiceName serviceName);
 
-    //@Message(id = 107, value = "EE Concurrent Transaction Setup Provider service not installed.")
-    //IllegalStateException transactionSetupProviderServiceNotInstalled();
+    @Message(id = 107, value = "EE Concurrent Transaction Setup Provider service not installed.")
+    IllegalStateException transactionSetupProviderServiceNotInstalled();
 
     @Message(id = 108, value = "Instance data can only be set during construction")
     IllegalStateException instanceDataCanOnlyBeSetDuringConstruction();
@@ -1078,4 +1075,11 @@ public interface EeLogger extends BasicLogger {
      */
     @Message(id = 109, value = "A class must not declare more than one AroundInvoke method. %s has %s methods annotated.")
     DeploymentUnitProcessingException aroundInvokeAnnotationUsedTooManyTimes(DotName className, int numberOfAnnotatedMethods);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 110, value = "Failed to run scheduled task")
+    void failedToRunTask(@Cause Exception e);
+
+    @Message(id = 111, value = "Cannot run scheduled task %s as container is suspended")
+    IllegalStateException cannotRunScheduledTask(Object delegate);
 }

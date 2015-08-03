@@ -31,7 +31,8 @@ vi:ts=4:sw=4:expandtab
     <parent>
         <groupId>org.wildfly</groupId>
         <artifactId>wildfly-parent</artifactId>
-        <version>9.0.0.Alpha2-SNAPSHOT</version>
+        <version>10.0.0.Beta1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>wildfly-ejb3</artifactId>
@@ -39,6 +40,11 @@ vi:ts=4:sw=4:expandtab
     <name>WildFly: EJB Subsystem</name>
 
     <dependencies>
+        <dependency>
+            <groupId>org.jboss.common</groupId>
+            <artifactId>jboss-common-beans</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.wildfly</groupId>
             <artifactId>wildfly-connector</artifactId>
@@ -69,10 +75,10 @@ vi:ts=4:sw=4:expandtab
             <groupId>org.wildfly</groupId>
             <artifactId>wildfly-ee</artifactId>
         </dependency>
-
+ 
         <dependency>
             <groupId>org.wildfly</groupId>
-            <artifactId>wildfly-jacorb</artifactId>
+            <artifactId>wildfly-iiop-openjdk</artifactId>
         </dependency>
 
         <dependency>
@@ -87,7 +93,7 @@ vi:ts=4:sw=4:expandtab
 
         <dependency>
             <groupId>org.wildfly.security</groupId>
-            <artifactId>wildfly-security-manager</artifactId>
+            <artifactId>wildfly-elytron</artifactId>
         </dependency>
 
         <dependency>
@@ -98,11 +104,6 @@ vi:ts=4:sw=4:expandtab
         <dependency>
             <groupId>org.hibernate.javax.persistence</groupId>
             <artifactId>hibernate-jpa-2.1-api</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jboss</groupId>
-            <artifactId>jboss-common-core</artifactId>
         </dependency>
 
         <dependency>
@@ -203,5 +204,11 @@ projects that depend on this project.-->
             <artifactId>groovy-all</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.jboss.spec.javax.rmi</groupId>
+            <artifactId>jboss-rmi-api_1.0_spec</artifactId>
+            <scope>test</scope>
+      </dependency>
     </dependencies>
 </project>
